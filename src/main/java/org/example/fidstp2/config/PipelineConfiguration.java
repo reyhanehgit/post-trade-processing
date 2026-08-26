@@ -26,6 +26,7 @@ import org.example.fidstp2.service.TradePipelineService;
 import org.example.fidstp2.service.TradeProcessingService;
 import org.example.fidstp2.service.TradePublicationService;
 import org.example.fidstp2.validator.FxOptionTradeValidator;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -137,10 +138,15 @@ public class PipelineConfiguration {
     }
 
     @Bean
-    public ProducerFactory<String, String> producerFactory() {
+    public ProducerFactory<String, String> producerFactory(
+            @Value("${spring.kafka.bootstrap-servers}") String bootstrapServers
+    ) {
         Map<String, Object> properties = new HashMap<>();
-        properties.put("key.serializer", org.apache.kafka.common.serialization.StringSerializer.class.getName());
-        properties.put("value.serializer", org.apache.kafka.common.serialization.StringSerializer.class.getName());
+        properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+                org.apache.kafka.common.serialization.StringSerializer.class.getName());
+        properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+                org.apache.kafka.common.serialization.StringSerializer.class.getName());
         return new DefaultKafkaProducerFactory<>(properties);
     }
 

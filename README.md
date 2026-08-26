@@ -14,6 +14,7 @@ This repository already contains the core pipeline building blocks and automated
 - [Technology stack](#technology-stack)
 - [Prerequisites](#prerequisites)
 - [Getting started](#getting-started)
+- [Docker local infrastructure](#docker-local-infrastructure)
 - [Configuration](#configuration)
 - [Inbound message format](#inbound-message-format)
 - [Database and migrations](#database-and-migrations)
@@ -219,6 +220,8 @@ docker run --name fidstp2-postgres \
   -d postgres:16
 ```
 
+If you want PostgreSQL **and** Kafka together, use the compose setup in the next section instead.
+
 ### 4) Run the application
 
 If you do **not** have Kafka running locally yet, disable the listener first:
@@ -243,6 +246,72 @@ KAFKA_BOOTSTRAP_SERVERS=localhost:9092 \
 
 ```bash
 curl http://localhost:8080/actuator/health
+```
+
+## Docker local infrastructure
+
+The repository now includes a root `docker-compose.yml` that provisions:
+
+- PostgreSQL 16 on `localhost:5432`
+- Kafka on `localhost:9092`
+- Kafka UI on `http://localhost:8081`
+- automatic creation of these topics:
+  - `fx.option.trade.raw`
+  - `fx.option.trade.processed`
+  - `fx.option.trade.dlq`
+
+### Start the full local stack
+
+```bash
+cd "/Users/amirsemsar/IdeaProjects/fidstp2"
+docker compose up -d
+```
+
+### Check container status
+
+```bash
+cd "/Users/amirsemsar/IdeaProjects/fidstp2"
+docker compose ps
+```
+
+### Check Kafka topics
+
+```bash
+cd "/Users/amirsemsar/IdeaProjects/fidstp2"
+docker compose exec kafka /usr/bin/kafka-topics --bootstrap-server localhost:29092 --list
+```
+
+### Stop the stack
+
+```bash
+cd "/Users/amirsemsar/IdeaProjects/fidstp2"
+docker compose down
+```
+
+### Stop the stack and remove volumes
+
+```bash
+cd "/Users/amirsemsar/IdeaProjects/fidstp2"
+docker compose down -v
+```
+
+### View logs
+
+```bash
+cd "/Users/amirsemsar/IdeaProjects/fidstp2"
+docker compose logs -f postgres kafka kafka-ui
+```
+
+### Run the application against the Docker services
+
+```bash
+cd "/Users/amirsemsar/IdeaProjects/fidstp2"
+DB_URL=jdbc:postgresql://localhost:5432/fidstp2 \
+DB_USERNAME=postgres \
+DB_PASSWORD=postgres \
+KAFKA_BOOTSTRAP_SERVERS=localhost:9092 \
+APP_KAFKA_LISTENER_ENABLED=true \
+./gradlew bootRun
 ```
 
 ## Configuration

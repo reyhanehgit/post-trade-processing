@@ -66,6 +66,20 @@ See `IMPLEMENTATION_PHASES.md` and `HELP.md` for the full target scope.
 
 ## Architecture overview
 
+### Microservices architecture
+
+The system now supports a **microservices deployment model**:
+
+- **Main app (FIDSTP2)** runs on port `8080` with Kafka and main PostgreSQL database.
+- **Counterparty Service** runs independently on port `8888` with its own PostgreSQL database.
+- Services communicate via HTTP REST APIs (configurable local or remote).
+- Both services are containerized and orchestrated via Docker Compose.
+
+**Configuration:**
+- Set `ENRICHMENT_COUNTERPARTY_REMOTE_ENABLED=true` (env var) to enable remote service.
+- Set `ENRICHMENT_COUNTERPARTY_REMOTE_BASE_URL` to override the service endpoint (default: `http://counterparty-service:8888`).
+- When disabled (`false`), the app uses local JPA-backed enrichment (backward compatible).
+
 ### Main flow
 
 ```text
@@ -251,15 +265,24 @@ curl http://localhost:8080/actuator/health
 
 ## Docker local infrastructure
 
-The repository now includes a root `docker-compose.yml` that provisions:
+The repository now includes a root `docker-compose.yml` that provisions a complete **microservices-ready stack**:
 
-- PostgreSQL 16 on `localhost:5432`
-- Kafka on `localhost:9092`
-- Kafka UI on `http://localhost:8081`
-- automatic creation of these topics:
-  - `fx.option.trade.raw`
-  - `fx.option.trade.processed`
-  - `fx.option.trade.dlq`
+### Services included
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| `postgres` | `5432` | Main app database (PostgreSQL 16) |
+| `counterparty-db` | `5433` | Counterparty service database (PostgreSQL 16) |
+| `kafka` | `9092` | Message broker |
+| `kafka-ui` | `8081` | Kafka UI for topic inspection |
+| `kafka-init` | (none) | Initializes topics on startup |
+| `counterparty-service` | `8888` | Counterparty microservice (Spring Boot) |
+| `fidstp2-app` | `8080` | Main FIDSTP2 application (Spring Boot) |
+
+Automatic topic creation:
+- `fx.option.trade.raw`
+- `fx.option.trade.processed`
+- `fx.option.trade.dlq`
 
 ### Start the full local stack
 
@@ -267,6 +290,15 @@ The repository now includes a root `docker-compose.yml` that provisions:
 cd "/Users/amirsemsar/IdeaProjects/fidstp2"
 docker compose up -d
 ```
+
+This will:
+1. Create and start both PostgreSQL instances
+2. Start Kafka broker and Kafka UI
+3. Build and run the Counterparty microservice
+4. Build and run the main FIDSTP2 app
+5. Main app automatically connects to remote Counterparty service
+
+**Expected result:** All 7 containers running, main app successfully calling counterparty service at `http://counterparty-service:8888`
 
 ### Check container status
 
@@ -336,7 +368,14 @@ The main runtime configuration lives in `src/main/resources/application.properti
 | `app.kafka.listener.enabled` | `true` | Enable/disable Kafka listener |
 | `spring.flyway.enabled` | `true` | Enable DB migrations |
 
-### Actuator endpoints exposed
+### Enrichment / Microservices properties
+
+| Property | Default | Purpose |
+|---|---|---|
+| `enrichment.counterparty.remote.enabled` | `false` | Enable remote Counterparty service (set `true` for microservices) |
+| `enrichment.counterparty.remote.base-url` | `http://localhost:8888` | Counterparty service base URL |
+
+When `enrichment.counterparty.remote.enabled=true`, the app calls the remote Counterparty microservice instead of using local JPA-backed enrichment.
 
 - `/actuator/health`
 - `/actuator/info`

@@ -1,6 +1,5 @@
 package org.example.fidstp2.config;
 
-import org.example.fidstp2.domain.Counterparty;
 import org.example.fidstp2.domain.CurrencyPair;
 import org.example.fidstp2.domain.LegalEntity;
 import org.example.fidstp2.domain.SettlementInstruction;
@@ -8,10 +7,11 @@ import org.example.fidstp2.dto.ProcessedTradeEvent;
 import org.example.fidstp2.enrichment.CounterpartyService;
 import org.example.fidstp2.enrichment.CurrencyPairService;
 import org.example.fidstp2.enrichment.FxOptionTradeEnrichmentService;
-import org.example.fidstp2.enrichment.InMemoryCounterpartyService;
 import org.example.fidstp2.enrichment.InMemoryCurrencyPairService;
 import org.example.fidstp2.enrichment.InMemoryLegalEntityService;
 import org.example.fidstp2.enrichment.InMemorySettlementInstructionService;
+import org.example.fidstp2.enrichment.JpaCounterpartyService;
+import org.example.fidstp2.enrichment.RemoteCounterpartyService;
 import org.example.fidstp2.enrichment.LegalEntityService;
 import org.example.fidstp2.enrichment.SettlementInstructionService;
 import org.example.fidstp2.mapper.FixToFxOptionTradeMapper;
@@ -27,18 +27,22 @@ import org.example.fidstp2.service.TradePipelineService;
 import org.example.fidstp2.service.TradePersistenceService;
 import org.example.fidstp2.service.TradeProcessingService;
 import org.example.fidstp2.service.TradePublicationService;
+import org.example.fidstp2.service.CounterpartyQueryService;
+import org.example.fidstp2.repository.CounterpartyRepository;
 import org.example.fidstp2.repository.OutboxEventRepository;
 import org.example.fidstp2.repository.ProcessingHistoryRepository;
 import org.example.fidstp2.repository.TradeRepository;
 import org.example.fidstp2.validator.FxOptionTradeValidator;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
+import org.springframework.web.client.RestTemplate;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -80,10 +84,18 @@ public class PipelineConfiguration {
     }
 
     @Bean
-    public CounterpartyService counterpartyService() {
-        return new InMemoryCounterpartyService(Map.of(
-                "CP-1", new Counterparty("CP-1", "Demo Counterparty", true)
-        ));
+    public CounterpartyService counterpartyService(CounterpartyRepository counterpartyRepository) {
+        return new JpaCounterpartyService(counterpartyRepository);
+    }
+
+    @Bean
+    public RestTemplate restTemplate() {
+        return new RestTemplate();
+    }
+
+    @Bean
+    public CounterpartyQueryService counterpartyQueryService(CounterpartyService counterpartyService) {
+        return new CounterpartyQueryService(counterpartyService);
     }
 
     @Bean

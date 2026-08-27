@@ -19,6 +19,7 @@ This repository already contains the core pipeline building blocks and automated
 - [Inbound message format](#inbound-message-format)
 - [Database and migrations](#database-and-migrations)
 - [Kafka topics](#kafka-topics)
+- [How to verify persistence after processing](#how-to-verify-persistence-after-processing)
 - [End-to-end local walkthrough](#end-to-end-local-walkthrough)
 - [Testing](#testing)
 - [Roadmap and supporting docs](#roadmap-and-supporting-docs)
@@ -430,6 +431,95 @@ The Kafka consumer is implemented in `FxOptionTradeConsumer` and listens using:
 - group ID from `spring.kafka.consumer.group-id`
 
 Processed events are published as JSON strings via `KafkaPublishedEventPublisher`.
+
+## How to verify persistence after processing
+
+If you send a raw trade message and want to confirm it was written to PostgreSQL, use a unique trade ID and then query the tables directly.
+
+### 1) Send a message with a unique `trade_id`
+
+Example message:
+
+```text
+11=T-CHECK-777|37=EXT-CHECK-777|20000=OPTION|55=EUR/USD|15=EUR|38=2500000|54=1|75=20260826|64=20260829|20001=CALL|44=1.2500|20003=20261001|20004=VANILLA|1=CP-1|20006=LE-1|49=OMS|
+```
+
+### 2) Query the database in your IDE console
+
+Run these SQL checks against `fidstp2`:
+
+```sql
+-- Main persisted trade row
+SELECT id, trade_id, external_trade_id, processing_status, received_timestamp, processed_timestamp
+FROM trade
+WHERE trade_id = 'T-CHECK-777';
+```
+
+```sql
+-- Any persisted trade legs linked to that trade
+SELECT l.*
+FROM trade_leg l
+JOIN trade t ON t.id = l.trade_id
+WHERE t.trade_id = 'T-CHECK-777';
+```
+
+```sql
+-- Processing/audit trail entries
+SELECT trade_id, status, stage, message, created_at
+FROM processing_history
+WHERE trade_id = 'T-CHECK-777'
+ORDER BY created_at;
+```
+
+```sql
+-- Outbox records used for publication tracking
+SELECT aggregate_id, event_type, status, published_at
+FROM outbox_event
+WHERE aggregate_id = 'T-CHECK-777'
+ORDER BY created_at;
+```
+
+### 3) What success looks like
+
+- `trade` returns 1 row for the `trade_id`
+- `processing_history` contains at least one `PROCESSING` and one `PUBLISHED` row
+- `outbox_event` contains a row with `status = 'PUBLISHED'`
+- `processed_timestamp` is populated on the `trade` row
+
+If those queries return no rows, the trade likely failed before the persistence step or the app was not running with Kafka listener enabled.
+
+### 4) One-shot SQL summary
+
+If you want a single result that summarizes the trade across all persistence tables, run this:
+
+```sql
+SELECT
+	'trade' AS table_name,
+	COUNT(*) AS row_count
+FROM trade
+WHERE trade_id = 'T-CHECK-777'
+UNION ALL
+SELECT
+	'trade_leg',
+	COUNT(*)
+FROM trade_leg l
+JOIN trade t ON t.id = l.trade_id
+WHERE t.trade_id = 'T-CHECK-777'
+UNION ALL
+SELECT
+	'processing_history',
+	COUNT(*)
+FROM processing_history
+WHERE trade_id = 'T-CHECK-777'
+UNION ALL
+SELECT
+	'outbox_event',
+	COUNT(*)
+FROM outbox_event
+WHERE aggregate_id = 'T-CHECK-777';
+```
+
+Expected values are `trade=1`, `processing_history>=1`, `outbox_event=1`, and `trade_leg` may be `0` or more depending on the trade.
 
 ## End-to-end local walkthrough
 

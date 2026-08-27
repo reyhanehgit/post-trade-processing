@@ -34,7 +34,7 @@ public class OutboxEventEntity {
     @Column(name = "published_at")
     private Instant publishedAt;
 
-    protected OutboxEventEntity() {
+    public OutboxEventEntity() {
     }
 
     public Long getId() {

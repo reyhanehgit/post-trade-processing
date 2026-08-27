@@ -35,7 +35,7 @@ public class FxOptionTradeEntity extends TradeEntity {
     @OneToMany(mappedBy = "trade", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TradeLegEntity> legs = new ArrayList<>();
 
-    protected FxOptionTradeEntity() {
+    public FxOptionTradeEntity() {
     }
 
     public OptionType getOptionType() {

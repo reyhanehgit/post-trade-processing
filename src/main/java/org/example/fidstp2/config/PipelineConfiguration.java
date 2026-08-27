@@ -15,6 +15,7 @@ import org.example.fidstp2.enrichment.InMemorySettlementInstructionService;
 import org.example.fidstp2.enrichment.LegalEntityService;
 import org.example.fidstp2.enrichment.SettlementInstructionService;
 import org.example.fidstp2.mapper.FixToFxOptionTradeMapper;
+import org.example.fidstp2.mapper.EnrichedTradeToFxOptionTradeEntityMapper;
 import org.example.fidstp2.mapper.ProcessedTradeToPublishedEventMapper;
 import org.example.fidstp2.parser.DefaultFixMessageAdapter;
 import org.example.fidstp2.parser.FixMessageAdapter;
@@ -23,8 +24,12 @@ import org.example.fidstp2.processor.FxOptionTradeProcessor;
 import org.example.fidstp2.publisher.KafkaPublishedEventPublisher;
 import org.example.fidstp2.publisher.PublishedEventPublisher;
 import org.example.fidstp2.service.TradePipelineService;
+import org.example.fidstp2.service.TradePersistenceService;
 import org.example.fidstp2.service.TradeProcessingService;
 import org.example.fidstp2.service.TradePublicationService;
+import org.example.fidstp2.repository.OutboxEventRepository;
+import org.example.fidstp2.repository.ProcessingHistoryRepository;
+import org.example.fidstp2.repository.TradeRepository;
 import org.example.fidstp2.validator.FxOptionTradeValidator;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.springframework.beans.factory.annotation.Value;
@@ -123,13 +128,35 @@ public class PipelineConfiguration {
     }
 
     @Bean
+    public EnrichedTradeToFxOptionTradeEntityMapper enrichedTradeToFxOptionTradeEntityMapper() {
+        return new EnrichedTradeToFxOptionTradeEntityMapper();
+    }
+
+    @Bean
+    public TradePersistenceService tradePersistenceService(
+            TradeRepository tradeRepository,
+            ProcessingHistoryRepository processingHistoryRepository,
+            OutboxEventRepository outboxEventRepository,
+            EnrichedTradeToFxOptionTradeEntityMapper mapper
+    ) {
+        return new TradePersistenceService(
+                tradeRepository,
+                processingHistoryRepository,
+                outboxEventRepository,
+                mapper,
+                Clock.systemUTC()
+        );
+    }
+
+    @Bean
     public TradeProcessingService tradeProcessingService(
             FixTradeMessageParser tradeMessageParser,
             FxOptionTradeValidator tradeValidator,
             FxOptionTradeEnrichmentService enrichmentService,
-            FxOptionTradeProcessor processor
+            FxOptionTradeProcessor processor,
+            TradePersistenceService persistenceService
     ) {
-        return new TradeProcessingService(tradeMessageParser, tradeValidator, enrichmentService, processor);
+        return new TradeProcessingService(tradeMessageParser, tradeValidator, enrichmentService, processor, persistenceService);
     }
 
     @Bean
@@ -167,9 +194,11 @@ public class PipelineConfiguration {
     @Bean
     public TradePublicationService tradePublicationService(
             ProcessedTradeToPublishedEventMapper mapper,
-            PublishedEventPublisher<ProcessedTradeEvent> publisher
+            PublishedEventPublisher<ProcessedTradeEvent> publisher,
+            TradePersistenceService persistenceService,
+            ObjectMapper objectMapper
     ) {
-        return new TradePublicationService(mapper, publisher);
+        return new TradePublicationService(mapper, publisher, persistenceService, objectMapper);
     }
 
     @Bean

@@ -35,7 +35,7 @@ public class ProcessingHistoryEntity {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    protected ProcessingHistoryEntity() {
+    public ProcessingHistoryEntity() {
     }
 
     public Long getId() { return id; }

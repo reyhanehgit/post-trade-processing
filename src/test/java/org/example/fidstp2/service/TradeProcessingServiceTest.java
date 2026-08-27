@@ -21,22 +21,31 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 class TradeProcessingServiceTest {
 
     @Test
     void processesRawFixMessageEndToEnd() {
-        TradeProcessingService service = buildService();
+        TradePersistenceService persistenceService = mock(TradePersistenceService.class);
+        TradeProcessingService service = buildService(persistenceService);
 
         ProcessedTrade result = service.processRawMessage(validFixMessage());
 
         assertEquals("T-500", result.getTradeId());
         assertEquals(ProcessingStatus.PROCESSED, result.getStatus());
+        verify(persistenceService).upsertTrade(any());
+        verify(persistenceService).markProcessed(any());
+        verify(persistenceService).appendProcessingHistory(eq("T-500"), eq(ProcessingStatus.PROCESSED), eq("PROCESSING"), any());
     }
 
     @Test
     void rejectsInvalidTradeDuringValidation() {
-        TradeProcessingService service = buildService();
+        TradePersistenceService persistenceService = mock(TradePersistenceService.class);
+        TradeProcessingService service = buildService(persistenceService);
 
         TradeValidationException ex = assertThrows(
                 TradeValidationException.class,
@@ -44,9 +53,10 @@ class TradeProcessingServiceTest {
         );
 
         assertEquals("PRODUCT_TYPE_INVALID: productType must be FX_OPTION or OPTION", ex.getMessage());
+        verify(persistenceService).appendProcessingHistory(eq("T-501"), eq(ProcessingStatus.VALIDATION_FAILED), eq("VALIDATION"), any());
     }
 
-    private TradeProcessingService buildService() {
+    private TradeProcessingService buildService(TradePersistenceService persistenceService) {
         return new TradeProcessingService(
                 new FixTradeMessageParser(),
                 new FxOptionTradeValidator(),
@@ -59,7 +69,8 @@ class TradeProcessingServiceTest {
                                 new SettlementInstruction("SI-1", "ACC-001", "CLS")
                         ))
                 ),
-                new FxOptionTradeProcessor()
+                new FxOptionTradeProcessor(),
+                persistenceService
         );
     }
 

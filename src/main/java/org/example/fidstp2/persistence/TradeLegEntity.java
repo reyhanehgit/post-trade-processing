@@ -45,7 +45,7 @@ public class TradeLegEntity {
     @JoinColumn(name = "trade_id", nullable = false)
     private FxOptionTradeEntity trade;
 
-    protected TradeLegEntity() {
+    public TradeLegEntity() {
     }
 
     public Long getId() {

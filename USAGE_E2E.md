@@ -26,6 +26,19 @@ curl -s http://localhost:8888/api/reference/counterparties
 curl -s http://localhost:8889/api/reference/currency-pairs
 ```
 
+## 2.1) Open Kafka UI
+
+Kafka UI is exposed from Docker compose on host port `8081`.
+
+- Open in browser: `http://localhost:8081`
+- Cluster name in UI: `fidstp2-local`
+
+Optional quick HTTP check:
+
+```bash
+curl -i http://localhost:8081
+```
+
 ## 3) Send a valid FX option trade to Kafka
 
 Use one unique trade id each run:

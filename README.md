@@ -8,17 +8,22 @@ This repository already contains the core pipeline building blocks and automated
 
 - [What the service does](#what-the-service-does)
 - [Current implementation status](#current-implementation-status)
+- [Project progress snapshot](#project-progress-snapshot)
 - [Architecture overview](#architecture-overview)
 - [Sequence diagram](#sequence-diagram)
 - [Project structure](#project-structure)
 - [Technology stack](#technology-stack)
 - [Prerequisites](#prerequisites)
 - [Getting started](#getting-started)
+- [Quick E2E usage guide](USAGE_E2E.md)
+- [Active task board](NEXT_TASKS.md)
 - [Docker local infrastructure](#docker-local-infrastructure)
 - [Configuration](#configuration)
+- [Operations quick-check](#operations-quick-check)
 - [Inbound message format](#inbound-message-format)
 - [Database and migrations](#database-and-migrations)
 - [Kafka topics](#kafka-topics)
+- [Planned trade APIs (next slice)](#planned-trade-apis-next-slice)
 - [How to verify persistence after processing](#how-to-verify-persistence-after-processing)
 - [End-to-end local walkthrough](#end-to-end-local-walkthrough)
 - [Testing](#testing)
@@ -46,23 +51,38 @@ At a high level, the application processes FX option trades like this:
 - Pipeline wiring in `src/main/java/org/example/fidstp2/config/PipelineConfiguration.java`
 - FIX adaptation and parsing
 - FX option validation rules
-- In-memory enrichment services
+- Property-driven enrichment services (local JPA/in-memory or remote microservice)
 - Trade processing and publication services
 - Kafka consumer and Kafka publisher abstractions
+- Consumer retries with exponential backoff and DLQ fallback
+- Outbox retry scheduler with dead-letter transition at max attempts
+- Reliability metrics for retry and DLQ behavior
 - JPA entities and repositories for trades, trade legs, processing history, and outbox events
-- Flyway migration files in `src/main/resources/db/migration`
+- Flyway migration files in `src/main/resources/db/migration` (including outbox retry hardening)
+- Profile-specific retry tuning in `application-dev.properties` and `application-prod.properties`
+- Reference-data REST APIs (`/api/reference/counterparties/**` and `/api/reference/currency-pairs/**`)
 - Unit and integration-style test coverage across parser, validator, mapper, processor, publisher, service, consumer, and persistence flows
 
 ### Planned / documented but not fully delivered yet
 
 The repository also contains a broader roadmap for operational features such as:
 
-- richer persistence orchestration and idempotency behavior
-- retry / DLQ / replay operations
-- REST APIs for trade lookup and replay
-- production observability and hardening
+- full trade query/history/status/replay REST APIs
+- broader replay workflows and operational controls
+- deeper observability (throughput/latency business metrics, richer runbooks)
 
 See `IMPLEMENTATION_PHASES.md` and `HELP.md` for the full target scope.
+
+## Project progress snapshot
+
+Approximate implementation status (August 2026):
+
+- **Phases 0-5:** complete or near complete (core pipeline, persistence, publication)
+- **Phase 6 (Kafka reliability):** mostly complete (retries, DLQ routing, outbox retry scheduler, metrics)
+- **Phase 7 (trade REST APIs/replay):** early (reference-data controller exists, trade query/replay endpoints pending)
+- **Phase 8 (observability hardening):** in progress (actuator + reliability counters in place, broader ops metrics pending)
+
+Estimated overall completion: **~70%**.
 
 ## Architecture overview
 
@@ -77,8 +97,21 @@ The system now supports a **microservices deployment model**:
 
 **Configuration:**
 - Set `ENRICHMENT_COUNTERPARTY_REMOTE_ENABLED=true` (env var) to enable remote service.
-- Set `ENRICHMENT_COUNTERPARTY_REMOTE_BASE_URL` to override the service endpoint (default: `http://counterparty-service:8888`).
+- Set `ENRICHMENT_COUNTERPARTY_REMOTE_BASE_URL` to override the service endpoint (app default: `http://localhost:8888`; Docker compose override: `http://counterparty-service:8888`).
+- Set `ENRICHMENT_CURRENCY_PAIR_REMOTE_ENABLED=true` (env var) to enable remote currency-pair service.
+- Set `ENRICHMENT_CURRENCY_PAIR_REMOTE_BASE_URL` to override the service endpoint (app default: `http://localhost:8889`; Docker compose override: `http://currency-pair-service:8889`).
 - When disabled (`false`), the app uses local JPA-backed enrichment (backward compatible).
+
+**Reference-data caching (Guava):**
+- Remote counterparty and currency-pair clients use `LoadingCache` with configurable size and TTL.
+- By default, startup warm-up preloads all records via list endpoints (`/api/reference/counterparties` and `/api/reference/currency-pairs`).
+- Disable full warm-up if needed:
+  - `ENRICHMENT_COUNTERPARTY_CACHE_PRELOAD_ALL=false`
+  - `ENRICHMENT_CURRENCY_PAIR_CACHE_PRELOAD_ALL=false`
+- Configure preload IDs as comma-separated values:
+  - `ENRICHMENT_COUNTERPARTY_CACHE_PRELOAD_IDS=CP-1,CP-2`
+  - `ENRICHMENT_CURRENCY_PAIR_CACHE_PRELOAD_IDS=EUR/USD,GBP/USD`
+- Local `JpaCounterpartyService` preloads all counterparties from the local database at startup.
 
 ### Main flow
 
@@ -208,6 +241,8 @@ The Gradle wrapper is included, so you do not need a separately installed Gradle
 
 ## Getting started
 
+For a full end-to-end test flow (produce trade to Kafka, verify DB persistence, and check downstream/DLQ), use `USAGE_E2E.md`.
+
 ### 1) Build the project
 
 ```bash
@@ -273,10 +308,12 @@ The repository now includes a root `docker-compose.yml` that provisions a comple
 |---------|------|---------|
 | `postgres` | `5432` | Main app database (PostgreSQL 16) |
 | `counterparty-db` | `5433` | Counterparty service database (PostgreSQL 16) |
+| `currency-pair-db` | `5434` | Currency-pair service database (PostgreSQL 16) |
 | `kafka` | `9092` | Message broker |
 | `kafka-ui` | `8081` | Kafka UI for topic inspection |
 | `kafka-init` | (none) | Initializes topics on startup |
 | `counterparty-service` | `8888` | Counterparty microservice (Spring Boot) |
+| `currency-pair-service` | `8889` | Currency-pair microservice (Spring Boot) |
 | `fidstp2-app` | `8080` | Main FIDSTP2 application (Spring Boot) |
 
 Automatic topic creation:
@@ -292,13 +329,14 @@ docker compose up -d
 ```
 
 This will:
-1. Create and start both PostgreSQL instances
+1. Create and start three PostgreSQL instances
 2. Start Kafka broker and Kafka UI
 3. Build and run the Counterparty microservice
-4. Build and run the main FIDSTP2 app
-5. Main app automatically connects to remote Counterparty service
+4. Build and run the Currency Pair microservice
+5. Build and run the main FIDSTP2 app
+6. Main app automatically connects to remote Counterparty and Currency Pair services
 
-**Expected result:** All 7 containers running, main app successfully calling counterparty service at `http://counterparty-service:8888`
+**Expected result:** 8 long-running containers are up (`kafka-init` is a one-shot init container that should exit successfully after creating topics).
 
 ### Check container status
 
@@ -379,10 +417,13 @@ The main runtime configuration lives in `src/main/resources/application.properti
 
 | Property | Default | Purpose |
 |---|---|---|
-| `enrichment.counterparty.remote.enabled` | `false` | Enable remote Counterparty service (set `true` for microservices) |
+| `enrichment.counterparty.remote.enabled` | `true` | Enable remote Counterparty service |
 | `enrichment.counterparty.remote.base-url` | `http://localhost:8888` | Counterparty service base URL |
+| `enrichment.currency-pair.remote.enabled` | `true` | Enable remote Currency Pair service |
+| `enrichment.currency-pair.remote.base-url` | `http://localhost:8889` | Currency Pair service base URL |
 
 When `enrichment.counterparty.remote.enabled=true`, the app calls the remote Counterparty microservice instead of using local JPA-backed enrichment.
+When `enrichment.currency-pair.remote.enabled=true`, the app calls the remote Currency Pair microservice instead of local in-memory currency pair data.
 
 ### Reliability profile defaults
 
@@ -405,8 +446,12 @@ The app emits custom counters (visible via `/actuator/metrics` and `/actuator/pr
 - `fidstp2.outbox.retry.success`
 - `fidstp2.outbox.dead_lettered`
 - `fidstp2.consumer.dlq.publishes`
+- `fidstp2.enrichment.counterparty.cache.preload.records`
+- `fidstp2.enrichment.counterparty.cache.preload.duration`
+- `fidstp2.enrichment.currency_pair.cache.preload.records`
+- `fidstp2.enrichment.currency_pair.cache.preload.duration`
 
-### Operations quick-check
+## Operations quick-check
 
 If the app is running locally on `localhost:8080`, these commands give a fast operational view:
 
@@ -423,6 +468,8 @@ To inspect all exported names at once:
 ```bash
 curl -s http://localhost:8080/actuator/metrics
 ```
+
+### Actuator endpoints
 
 - `/actuator/health`
 - `/actuator/info`
@@ -487,6 +534,8 @@ Flyway migration files are stored in `src/main/resources/db/migration`.
   - creates the processing history audit table
 - `V3__create_outbox_event.sql`
   - creates the outbox event table used for event handoff tracking
+- `V4__create_counterparty_reference.sql`
+  - adds local counterparty reference table used by non-remote enrichment mode
 - `V5__harden_outbox_retries.sql`
   - adds retry counters/scheduling columns and an index for due retries
 
@@ -519,6 +568,17 @@ The Kafka consumer is implemented in `FxOptionTradeConsumer` and listens using:
 - group ID from `spring.kafka.consumer.group-id`
 
 Processed events are published as JSON strings via `KafkaPublishedEventPublisher`.
+
+## Planned trade APIs (next slice)
+
+The next delivery slice for Phase 7 is expected to add:
+
+- `GET /api/trades/{tradeId}`
+- `GET /api/trades/{tradeId}/history`
+- `GET /api/trades/{tradeId}/status`
+- `POST /api/trades/{tradeId}/replay`
+
+These endpoints are not fully implemented yet in the current codebase.
 
 ## How to verify persistence after processing
 
@@ -711,7 +771,7 @@ You should see a JSON payload shaped like the `ProcessedTradeEvent` contract, in
 
 ## Testing
 
-The repository includes 14 test classes across the major layers.
+The repository currently includes **23** test classes across the major layers.
 
 ### Covered areas
 
@@ -724,6 +784,7 @@ The repository includes 14 test classes across the major layers.
 - processing
 - publication
 - Kafka consumer orchestration
+- Kafka DLQ integration behavior
 - persistence smoke coverage
 - pipeline/service orchestration
 
@@ -757,15 +818,35 @@ Suggested milestone framing from the roadmap:
 
 To keep the README honest, here are the most important current-state notes:
 
-- enrichment reference data is currently in-memory, not fetched from external systems
+- enrichment is mixed-mode: counterparty and currency pair can be fetched from remote microservices; legal entity and settlement instruction remain local in-memory
 - the in-memory reference dataset in `PipelineConfiguration` is intentionally tiny:
   - counterparty: `CP-1`
   - currency pair: `EUR/USD`
   - legal entity: `LE-1`
   - settlement instruction keyed by `CP-1`
-- there are no REST controllers implemented yet
+- only reference-data REST API coverage exists today; full trade query/history/status/replay endpoints are pending
 - reliability behavior now includes listener retries with DLQ fallback and scheduled outbox republishing
 - the codebase is structured for future hardening, but some roadmap items are still planned rather than complete
+
+## Next pickup tasks
+
+If you want a practical implementation queue, pick up tasks in this order:
+
+1. **Trade APIs (Phase 7 core)**
+   - Implement `GET /api/trades/{tradeId}`, `GET /api/trades/{tradeId}/history`, and `GET /api/trades/{tradeId}/status`.
+   - Add integration tests for success/not-found/error contracts.
+2. **Replay API and controls**
+   - Implement `POST /api/trades/{tradeId}/replay` with idempotency and audit trail entries.
+   - Add guardrails (status checks, replay reason, duplicate suppression).
+3. **Reference data hardening**
+   - Add refresh/invalidation strategy for remote caches (scheduled refresh or admin-triggered refresh endpoint).
+   - Add cache stats metrics (hit/miss/load failure) and alerts.
+4. **Operational observability**
+   - Add business metrics: processing throughput, end-to-end latency, validation failure counts by reason.
+   - Add a short runbook for common incident scenarios (Kafka lag, DLQ growth, outbox retry backlog).
+5. **Reliability test depth**
+   - Add integration tests for outbox retry exhaustion and dead-letter transitions.
+   - Add chaos-style tests for temporary reference-service outages and recovery.
 
 ## Summary
 

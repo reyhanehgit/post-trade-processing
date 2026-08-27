@@ -91,6 +91,7 @@ public class PipelineConfiguration {
     }
 
     @Bean
+    @ConditionalOnProperty(name = "enrichment.counterparty.remote.enabled", havingValue = "false", matchIfMissing = true)
     public CounterpartyService counterpartyService(CounterpartyRepository counterpartyRepository) {
         return new JpaCounterpartyService(counterpartyRepository);
     }
@@ -106,6 +107,7 @@ public class PipelineConfiguration {
     }
 
     @Bean
+    @ConditionalOnProperty(name = "enrichment.currency-pair.remote.enabled", havingValue = "false", matchIfMissing = true)
     public CurrencyPairService currencyPairService() {
         return new InMemoryCurrencyPairService(Map.of(
                 "EUR/USD", new CurrencyPair("EUR/USD", "EUR", "USD")

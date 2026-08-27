@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -24,6 +25,11 @@ public class CounterpartyController {
     @GetMapping("/{id}")
     public CounterpartyResponse getCounterparty(@PathVariable String id) {
         return service.getById(id);
+    }
+
+    @GetMapping
+    public List<CounterpartyResponse> getAllCounterparties() {
+        return service.getAll();
     }
 
     @ExceptionHandler(RuntimeException.class)

@@ -165,6 +165,97 @@ Based on the requirements in `HELP.md`, this plan breaks the build into practica
 - No critical static analysis/lint issues.
 - Documentation updated for behavior and failure handling.
 
+## Current State Snapshot (August 2026)
+
+Use this as the practical handoff status for the current repository state.
+
+- **Phase 0:** complete
+- **Phase 1:** complete
+- **Phase 2:** complete
+- **Phase 3:** mostly complete (remote/local enrichment + startup cache warmup in place; cache refresh controls pending)
+- **Phase 4:** complete (trade/history/outbox plus retry-hardening migration)
+- **Phase 5:** mostly complete (core orchestration stable; broader replay/idempotency workflow still pending)
+- **Phase 6:** mostly complete (retry, DLQ, outbox republish, reliability metrics)
+- **Phase 7:** early (reference-data APIs exist; trade read/status/history/replay APIs pending)
+- **Phase 8:** in progress (actuator + reliability/caching metrics exist; broader business SLO metrics and runbook depth pending)
+
+## Prioritized Pickup Backlog (With Acceptance Criteria)
+
+Pick work top-to-bottom. Each item is done only when all acceptance checks pass.
+
+### 1) Trade read APIs (Phase 7 core)
+
+**Scope:**
+- Implement `GET /api/trades/{tradeId}`
+- Implement `GET /api/trades/{tradeId}/history`
+- Implement `GET /api/trades/{tradeId}/status`
+
+**Acceptance criteria:**
+- [ ] Returns `200` with stable JSON contracts for existing trades.
+- [ ] Returns `404` with consistent error payload for unknown `tradeId`.
+- [ ] Includes controller + service + repository test coverage.
+- [ ] Added examples in `README.md` and/or `USAGE_E2E.md`.
+
+### 2) Replay API with idempotent controls
+
+**Scope:**
+- Implement `POST /api/trades/{tradeId}/replay`.
+- Enforce replay guardrails (eligibility status, duplicate suppression, audit reason).
+
+**Acceptance criteria:**
+- [ ] Replay request writes explicit audit record to `processing_history`.
+- [ ] Duplicate replay requests do not produce duplicate terminal outcomes.
+- [ ] Failure scenarios are mapped to deterministic API errors.
+- [ ] Integration tests cover happy-path and duplicate replay behavior.
+
+### 3) Enrichment cache refresh/invalidation
+
+**Scope:**
+- Add refresh strategy for remote `CounterpartyService` and `CurrencyPairService` caches.
+- Optionally provide admin-triggered refresh endpoint or scheduled refresh job.
+
+**Acceptance criteria:**
+- [ ] Cache refresh behavior is configurable (interval or endpoint toggle).
+- [ ] Refresh failures do not break request-path enrichment.
+- [ ] Metrics capture refresh attempts/success/failure counts.
+- [ ] Tests prove stale entries are refreshed and lookups remain resilient.
+
+### 4) Outbox reliability depth tests
+
+**Scope:**
+- Add deeper integration coverage for retry exhaustion and dead-letter transitions.
+- Validate `next_retry_at`, `retry_count`, and terminal state transitions.
+
+**Acceptance criteria:**
+- [ ] Integration tests verify transition path `NEW -> PENDING_RETRY -> PUBLISHED`.
+- [ ] Integration tests verify terminal dead-letter transition after max attempts.
+- [ ] Assertions include persisted retry metadata in `outbox_event`.
+- [ ] No regression in existing DLQ integration tests.
+
+### 5) Observability expansion (Phase 8)
+
+**Scope:**
+- Add business metrics for throughput/latency/failures by reason.
+- Add alert-ready indicators for DLQ growth and retry backlog.
+
+**Acceptance criteria:**
+- [ ] Metrics exposed through `/actuator/metrics` and documented.
+- [ ] At least one end-to-end latency metric from consume to publish.
+- [ ] Failure counters broken down by validation, enrichment, and publish failures.
+- [ ] Ops quick-check includes metric names and expected thresholds.
+
+### 6) Operational runbook hardening
+
+**Scope:**
+- Expand incident procedures for Kafka lag, DLQ spikes, and reference-service outage.
+- Add concrete command snippets and triage flow.
+
+**Acceptance criteria:**
+- [ ] Runbook has step-by-step diagnosis + mitigation for each major incident.
+- [ ] Includes DB/Kafka commands that match current docker-compose service names.
+- [ ] Includes rollback/recovery notes for replay and outbox retry operations.
+- [ ] Cross-linked from `README.md` and `USAGE_E2E.md`.
+
 ## Week-by-Week Execution Plan (10 Weeks)
 
 Assumption: single engineer full-time (or equivalent team capacity). If team size differs, use this as dependency order and rebalance parallel tracks.

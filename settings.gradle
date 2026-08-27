@@ -1,2 +1,3 @@
 rootProject.name = 'fidstp2'
 include 'counterparty-service'
+include 'currency-pair-service'

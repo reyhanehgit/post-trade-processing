@@ -35,6 +35,24 @@ services:
       retries: 10
       start_period: 10s
 
+  currency-pair-db:
+    image: postgres:16
+    container_name: currency-pair-db
+    environment:
+      POSTGRES_DB: currency_pair_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - currency_pair_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d currency_pair_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
   kafka:
     image: confluentinc/cp-kafka:7.7.1
     container_name: fidstp2-kafka
@@ -107,6 +125,22 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://counterparty-db:5432/counterparty_db
     restart: unless-stopped
 
+  currency-pair-service:
+    build:
+      context: ./currency-pair-service
+      dockerfile: Dockerfile
+    container_name: currency-pair-service
+    depends_on:
+      currency-pair-db:
+        condition: service_healthy
+    ports:
+      - "8889:8889"
+    environment:
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      SPRING_DATASOURCE_URL: jdbc:postgresql://currency-pair-db:5432/currency_pair_db
+    restart: unless-stopped
+
   fidstp2-app:
     build:
       context: .
@@ -119,6 +153,8 @@ services:
         condition: service_healthy
       counterparty-service:
         condition: service_started
+      currency-pair-service:
+        condition: service_started
     ports:
       - "8080:8080"
     environment:
@@ -128,10 +164,13 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       ENRICHMENT_COUNTERPARTY_REMOTE_ENABLED: "true"
       ENRICHMENT_COUNTERPARTY_REMOTE_BASE_URL: http://counterparty-service:8888
+      ENRICHMENT_CURRENCY_PAIR_REMOTE_ENABLED: "true"
+      ENRICHMENT_CURRENCY_PAIR_REMOTE_BASE_URL: http://currency-pair-service:8889
     restart: unless-stopped
 
 volumes:
   postgres_data:
   kafka_data:
   counterparty_db_data:
+  currency_pair_db_data:
 

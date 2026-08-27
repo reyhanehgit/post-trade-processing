@@ -15,9 +15,15 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 
-public class FixToFxOptionTradeMapper {
+public class FixToFxOptionTradeMapper implements FixProductTradeMapper<FxOptionTrade> {
     private static final DateTimeFormatter FIX_DATE = DateTimeFormatter.BASIC_ISO_DATE;
 
+    @Override
+    public boolean supports(String productType) {
+        return true;
+    }
+
+    @Override
     public FxOptionTrade map(FixMessageDto fixMessage) {
         try {
             LocalDate tradeDate = parseDate(required(fixMessage, "75", "tradeDate"), "tradeDate");

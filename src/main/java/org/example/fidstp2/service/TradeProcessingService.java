@@ -3,11 +3,11 @@ package org.example.fidstp2.service;
 import org.example.fidstp2.domain.EnrichedTrade;
 import org.example.fidstp2.domain.FxOptionTrade;
 import org.example.fidstp2.domain.ProcessedTrade;
-import org.example.fidstp2.enrichment.TradeEnrichmentService;
+import org.example.fidstp2.enrichment.ProductTypeTradeEnrichmentRegistry;
 import org.example.fidstp2.exception.TradeValidationException;
 import org.example.fidstp2.parser.TradeMessageParser;
-import org.example.fidstp2.processor.FxOptionTradeProcessor;
-import org.example.fidstp2.validator.TradeValidator;
+import org.example.fidstp2.processor.ProductTypeTradeProcessorRegistry;
+import org.example.fidstp2.validator.ProductTypeTradeValidatorRegistry;
 import org.example.fidstp2.validator.ValidationError;
 import org.example.fidstp2.validator.ValidationResult;
 
@@ -16,37 +16,37 @@ import java.util.stream.Collectors;
 
 public class TradeProcessingService {
     private final TradeMessageParser<FxOptionTrade> parser;
-    private final TradeValidator<FxOptionTrade> validator;
-    private final TradeEnrichmentService<FxOptionTrade> enrichmentService;
-    private final FxOptionTradeProcessor processor;
+    private final ProductTypeTradeValidatorRegistry validatorRegistry;
+    private final ProductTypeTradeEnrichmentRegistry enrichmentRegistry;
+    private final ProductTypeTradeProcessorRegistry processorRegistry;
     private final TradePersistenceService persistenceService;
 
     public TradeProcessingService(
             TradeMessageParser<FxOptionTrade> parser,
-            TradeValidator<FxOptionTrade> validator,
-            TradeEnrichmentService<FxOptionTrade> enrichmentService,
-            FxOptionTradeProcessor processor,
+            ProductTypeTradeValidatorRegistry validatorRegistry,
+            ProductTypeTradeEnrichmentRegistry enrichmentRegistry,
+            ProductTypeTradeProcessorRegistry processorRegistry,
             TradePersistenceService persistenceService
     ) {
         this.parser = Objects.requireNonNull(parser, "parser is required");
-        this.validator = Objects.requireNonNull(validator, "validator is required");
-        this.enrichmentService = Objects.requireNonNull(enrichmentService, "enrichmentService is required");
-        this.processor = Objects.requireNonNull(processor, "processor is required");
+        this.validatorRegistry = Objects.requireNonNull(validatorRegistry, "validatorRegistry is required");
+        this.enrichmentRegistry = Objects.requireNonNull(enrichmentRegistry, "enrichmentRegistry is required");
+        this.processorRegistry = Objects.requireNonNull(processorRegistry, "processorRegistry is required");
         this.persistenceService = Objects.requireNonNull(persistenceService, "persistenceService is required");
     }
 
     public ProcessedTrade processRawMessage(String rawMessage) {
         FxOptionTrade trade = parser.parse(rawMessage);
         try {
-            ValidationResult validationResult = validator.validate(trade);
+            ValidationResult validationResult = validatorRegistry.validate(trade);
             if (!validationResult.isValid()) {
                 throw new TradeValidationException(toValidationMessage(validationResult));
             }
 
-            EnrichedTrade enrichedTrade = enrichmentService.enrich(trade);
+            EnrichedTrade enrichedTrade = enrichmentRegistry.enrich(trade);
             persistenceService.upsertTrade(enrichedTrade);
 
-            ProcessedTrade processedTrade = processor.process(enrichedTrade);
+            ProcessedTrade processedTrade = processorRegistry.process(enrichedTrade);
             persistenceService.markProcessed(processedTrade);
             persistenceService.appendProcessingHistory(
                     processedTrade.getTradeId(),

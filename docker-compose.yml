@@ -1,57 +1,65 @@
+x-postgres-credentials: &postgres-credentials
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: postgres
+
+x-app-restart: &app-restart
+  restart: unless-stopped
+
+x-postgres-healthcheck: &postgres-healthcheck
+  interval: 10s
+  timeout: 5s
+  retries: 10
+  start_period: 10s
+
+x-kafka-healthcheck: &kafka-healthcheck
+  interval: 15s
+  timeout: 10s
+  retries: 12
+  start_period: 30s
+
 services:
+
   postgres:
     image: postgres:16
     container_name: fidstp2-postgres
     environment:
+      <<: *postgres-credentials
       POSTGRES_DB: fidstp2
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
+      <<: *postgres-healthcheck
       test: ["CMD-SHELL", "pg_isready -U postgres -d fidstp2"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
 
   counterparty-db:
     image: postgres:16
     container_name: counterparty-db
     environment:
+      <<: *postgres-credentials
       POSTGRES_DB: counterparty_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
     ports:
       - "5433:5432"
     volumes:
       - counterparty_db_data:/var/lib/postgresql/data
     healthcheck:
+      <<: *postgres-healthcheck
       test: ["CMD-SHELL", "pg_isready -U postgres -d counterparty_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
 
   currency-pair-db:
     image: postgres:16
     container_name: currency-pair-db
     environment:
+      <<: *postgres-credentials
       POSTGRES_DB: currency_pair_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
     ports:
       - "5434:5432"
     volumes:
       - currency_pair_db_data:/var/lib/postgresql/data
     healthcheck:
+      <<: *postgres-healthcheck
       test: ["CMD-SHELL", "pg_isready -U postgres -d currency_pair_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
 
   kafka:
     image: confluentinc/cp-kafka:7.7.1
@@ -76,11 +84,8 @@ services:
     volumes:
       - kafka_data:/var/lib/kafka/data
     healthcheck:
+      <<: *kafka-healthcheck
       test: ["CMD-SHELL", "/usr/bin/kafka-topics --bootstrap-server localhost:29092 --list >/dev/null 2>&1"]
-      interval: 15s
-      timeout: 10s
-      retries: 12
-      start_period: 30s
 
   kafka-init:
     image: confluentinc/cp-kafka:7.7.1
@@ -120,10 +125,10 @@ services:
     ports:
       - "8888:8888"
     environment:
-      DB_USER: postgres
-      DB_PASSWORD: postgres
       SPRING_DATASOURCE_URL: jdbc:postgresql://counterparty-db:5432/counterparty_db
-    restart: unless-stopped
+    volumes:
+      - ./logs/counterparty-service:/app/logs
+    <<: *app-restart
 
   currency-pair-service:
     build:
@@ -136,10 +141,10 @@ services:
     ports:
       - "8889:8889"
     environment:
-      DB_USER: postgres
-      DB_PASSWORD: postgres
       SPRING_DATASOURCE_URL: jdbc:postgresql://currency-pair-db:5432/currency_pair_db
-    restart: unless-stopped
+    volumes:
+      - ./logs/currency-pair-service:/app/logs
+    <<: *app-restart
 
   fidstp2-app:
     build:
@@ -158,15 +163,17 @@ services:
     ports:
       - "8080:8080"
     environment:
-      DB_URL: jdbc:postgresql://postgres:5432/fidstp2
-      DB_USERNAME: postgres
-      DB_PASSWORD: postgres
-      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/fidstp2
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       ENRICHMENT_COUNTERPARTY_REMOTE_ENABLED: "true"
       ENRICHMENT_COUNTERPARTY_REMOTE_BASE_URL: http://counterparty-service:8888
       ENRICHMENT_CURRENCY_PAIR_REMOTE_ENABLED: "true"
       ENRICHMENT_CURRENCY_PAIR_REMOTE_BASE_URL: http://currency-pair-service:8889
-    restart: unless-stopped
+    volumes:
+      - ./logs/fidstp2-app:/app/logs
+    <<: *app-restart
 
 volumes:
   postgres_data:

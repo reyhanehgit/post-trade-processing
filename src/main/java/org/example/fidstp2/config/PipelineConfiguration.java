@@ -1,6 +1,7 @@
 package org.example.fidstp2.config;
 
 import org.example.fidstp2.domain.CurrencyPair;
+import org.example.fidstp2.domain.FxOptionTrade;
 import org.example.fidstp2.domain.LegalEntity;
 import org.example.fidstp2.domain.SettlementInstruction;
 import org.example.fidstp2.dto.ProcessedTradeEvent;
@@ -12,14 +13,20 @@ import org.example.fidstp2.enrichment.InMemoryLegalEntityService;
 import org.example.fidstp2.enrichment.InMemorySettlementInstructionService;
 import org.example.fidstp2.enrichment.JpaCounterpartyService;
 import org.example.fidstp2.enrichment.LegalEntityService;
+import org.example.fidstp2.enrichment.ProductTypeTradeEnrichmentRegistry;
 import org.example.fidstp2.enrichment.SettlementInstructionService;
+import org.example.fidstp2.enrichment.SpotTradeEnrichmentService;
 import org.example.fidstp2.mapper.FixToFxOptionTradeMapper;
+import org.example.fidstp2.mapper.FixTradeMapperRegistry;
+import org.example.fidstp2.mapper.FxSpotFixTradeMapper;
 import org.example.fidstp2.mapper.EnrichedTradeToFxOptionTradeEntityMapper;
 import org.example.fidstp2.mapper.ProcessedTradeToPublishedEventMapper;
 import org.example.fidstp2.parser.DefaultFixMessageAdapter;
 import org.example.fidstp2.parser.FixMessageAdapter;
 import org.example.fidstp2.parser.FixTradeMessageParser;
 import org.example.fidstp2.processor.FxOptionTradeProcessor;
+import org.example.fidstp2.processor.ProductTypeTradeProcessorRegistry;
+import org.example.fidstp2.processor.SpotTradeProcessor;
 import org.example.fidstp2.publisher.KafkaPublishedEventPublisher;
 import org.example.fidstp2.publisher.PublishedEventPublisher;
 import org.example.fidstp2.service.TradePipelineService;
@@ -34,6 +41,8 @@ import org.example.fidstp2.repository.OutboxEventRepository;
 import org.example.fidstp2.repository.ProcessingHistoryRepository;
 import org.example.fidstp2.repository.TradeRepository;
 import org.example.fidstp2.validator.FxOptionTradeValidator;
+import org.example.fidstp2.validator.ProductTypeTradeValidatorRegistry;
+import org.example.fidstp2.validator.SpotTradeValidator;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.springframework.beans.factory.annotation.Value;
@@ -56,6 +65,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.util.HashMap;
 import java.time.Duration;
 import java.time.Clock;
+import java.util.List;
 import java.util.Map;
 
 @Configuration
@@ -73,6 +83,19 @@ public class PipelineConfiguration {
     }
 
     @Bean
+    public FxSpotFixTradeMapper fxSpotFixTradeMapper(FixToFxOptionTradeMapper fallbackMapper) {
+        return new FxSpotFixTradeMapper(fallbackMapper);
+    }
+
+    @Bean
+    public FixTradeMapperRegistry<FxOptionTrade> fixTradeMapperRegistry(
+            FxSpotFixTradeMapper spotMapper,
+            FixToFxOptionTradeMapper fallbackMapper
+    ) {
+        return new FixTradeMapperRegistry<>(List.of(spotMapper, fallbackMapper));
+    }
+
+    @Bean
     public ObjectMapper objectMapper() {
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
@@ -81,13 +104,29 @@ public class PipelineConfiguration {
     }
 
     @Bean
-    public FixTradeMessageParser tradeMessageParser(FixMessageAdapter adapter, FixToFxOptionTradeMapper mapper) {
-        return new FixTradeMessageParser(adapter, mapper);
+    public FixTradeMessageParser tradeMessageParser(
+            FixMessageAdapter adapter,
+            FixTradeMapperRegistry<FxOptionTrade> mapperRegistry
+    ) {
+        return new FixTradeMessageParser(adapter, mapperRegistry);
     }
 
     @Bean
     public FxOptionTradeValidator tradeValidator() {
         return new FxOptionTradeValidator();
+    }
+
+    @Bean
+    public SpotTradeValidator spotTradeValidator() {
+        return new SpotTradeValidator();
+    }
+
+    @Bean
+    public ProductTypeTradeValidatorRegistry productTypeTradeValidatorRegistry(
+            SpotTradeValidator spotTradeValidator,
+            FxOptionTradeValidator fxOptionTradeValidator
+    ) {
+        return new ProductTypeTradeValidatorRegistry(List.of(spotTradeValidator, fxOptionTradeValidator));
     }
 
     @Bean
@@ -144,8 +183,34 @@ public class PipelineConfiguration {
     }
 
     @Bean
+    public SpotTradeEnrichmentService spotTradeEnrichmentService(FxOptionTradeEnrichmentService delegate) {
+        return new SpotTradeEnrichmentService(delegate);
+    }
+
+    @Bean
+    public ProductTypeTradeEnrichmentRegistry productTypeTradeEnrichmentRegistry(
+            SpotTradeEnrichmentService spotTradeEnrichmentService,
+            FxOptionTradeEnrichmentService fxOptionTradeEnrichmentService
+    ) {
+        return new ProductTypeTradeEnrichmentRegistry(List.of(spotTradeEnrichmentService, fxOptionTradeEnrichmentService));
+    }
+
+    @Bean
     public FxOptionTradeProcessor fxOptionTradeProcessor() {
         return new FxOptionTradeProcessor();
+    }
+
+    @Bean
+    public SpotTradeProcessor spotTradeProcessor(FxOptionTradeProcessor delegate) {
+        return new SpotTradeProcessor(delegate);
+    }
+
+    @Bean
+    public ProductTypeTradeProcessorRegistry productTypeTradeProcessorRegistry(
+            SpotTradeProcessor spotTradeProcessor,
+            FxOptionTradeProcessor fxOptionTradeProcessor
+    ) {
+        return new ProductTypeTradeProcessorRegistry(List.of(spotTradeProcessor, fxOptionTradeProcessor));
     }
 
     @Bean
@@ -179,12 +244,18 @@ public class PipelineConfiguration {
     @Bean
     public TradeProcessingService tradeProcessingService(
             FixTradeMessageParser tradeMessageParser,
-            FxOptionTradeValidator tradeValidator,
-            FxOptionTradeEnrichmentService enrichmentService,
-            FxOptionTradeProcessor processor,
+            ProductTypeTradeValidatorRegistry validatorRegistry,
+            ProductTypeTradeEnrichmentRegistry enrichmentRegistry,
+            ProductTypeTradeProcessorRegistry processorRegistry,
             TradePersistenceService persistenceService
     ) {
-        return new TradeProcessingService(tradeMessageParser, tradeValidator, enrichmentService, processor, persistenceService);
+        return new TradeProcessingService(
+                tradeMessageParser,
+                validatorRegistry,
+                enrichmentRegistry,
+                processorRegistry,
+                persistenceService
+        );
     }
 
     @Bean

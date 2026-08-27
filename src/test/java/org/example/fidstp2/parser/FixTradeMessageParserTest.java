@@ -53,5 +53,16 @@ class FixTradeMessageParserTest {
         assertEquals(BuySell.SELL, trade.getBuySell());
         assertEquals(OptionType.PUT, trade.getOptionType());
     }
+
+    @Test
+    void parsesSpotProductTypeUsingRegistryRouting() {
+        String raw = "11=T-102|37=EXT-102|20000=SPOT|55=EUR/USD|15=EUR|38=2500000|54=1|75=20260826|64=20260829|"
+                + "20001=CALL|44=1.2500|20003=20261001|20004=VANILLA|1=CP-101|20006=LE-42|49=OMS|";
+
+        FxOptionTrade trade = parser.parse(raw);
+
+        assertEquals("T-102", trade.getTradeId());
+        assertEquals("SPOT", trade.getProductType());
+    }
 }
 

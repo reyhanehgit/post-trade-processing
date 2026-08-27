@@ -77,6 +77,13 @@ docker exec -i fidstp2-postgres psql -U postgres -d fidstp2 -c "SELECT trade_id,
 docker exec -i fidstp2-postgres psql -U postgres -d fidstp2 -c "SELECT aggregate_id, event_type, status, retry_count, last_error, created_at, published_at FROM outbox_event WHERE aggregate_id = '$TRADE_ID' ORDER BY created_at;"
 ```
 
+If you see `ERROR: column "retry_count" does not exist`, your DB is on an older migration set. Rebuild/restart the main app so Flyway applies `V5__harden_outbox_retries.sql`:
+
+```bash
+./gradlew build -x test
+docker compose up -d --build fidstp2-app
+```
+
 ## 6) Verify DLQ behavior with an invalid trade
 
 This message is intentionally incomplete and should fail processing.
@@ -122,5 +129,53 @@ docker logs --tail=200 currency-pair-service
 
 ```bash
 docker exec fidstp2-kafka kafka-topics --bootstrap-server localhost:9092 --list
+```
+
+## 8.1) Easier log viewing helper
+
+Use the helper script in `scripts/logs.sh` for common log views:
+
+```bash
+./scripts/logs.sh app
+```
+
+```bash
+./scripts/logs.sh errors
+```
+
+```bash
+./scripts/logs.sh trade T-E2E-12345
+```
+
+## 8.2) Local log files on your machine
+
+Because `docker-compose.yml` mounts log directories for each app service, you can read logs directly from this repo:
+
+- `logs/fidstp2-app/fidstp2-app.log`
+- `logs/counterparty-service/counterparty-service.log`
+- `logs/currency-pair-service/currency-pair-service.log`
+
+Live tail examples:
+
+```bash
+tail -f logs/fidstp2-app/fidstp2-app.log
+```
+
+```bash
+tail -f logs/counterparty-service/counterparty-service.log
+```
+
+```bash
+tail -f logs/currency-pair-service/currency-pair-service.log
+```
+
+Quick filter examples:
+
+```bash
+grep -E "ERROR|WARN|DLQ|retry" logs/fidstp2-app/fidstp2-app.log | tail -n 50
+```
+
+```bash
+grep "T-E2E-12345" logs/fidstp2-app/fidstp2-app.log
 ```
 

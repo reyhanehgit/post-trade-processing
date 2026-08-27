@@ -9,18 +9,14 @@ import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
 
-public class FxOptionTradeValidator implements ProductTypeTradeValidator {
+public class SpotTradeValidator implements ProductTypeTradeValidator {
     private static final Pattern CURRENCY_PAIR_PATTERN = Pattern.compile("^[A-Z]{3}/[A-Z]{3}$");
     private static final Pattern ISO_CURRENCY_PATTERN = Pattern.compile("^[A-Z]{3}$");
     private static final String STAGE = "VALIDATION";
 
     @Override
     public boolean supports(String productType) {
-        if (productType == null || productType.isBlank()) {
-            return true;
-        }
-        String normalized = productType.toUpperCase(Locale.ROOT);
-        return "FX_OPTION".equals(normalized) || "OPTION".equals(normalized);
+        return "SPOT".equals(productType);
     }
 
     @Override
@@ -33,13 +29,9 @@ public class FxOptionTradeValidator implements ProductTypeTradeValidator {
 
         String tradeId = trade.getTradeId();
 
-        if (trade.getProductType() == null || trade.getProductType().isBlank()) {
-            errors.add(error(tradeId, "PRODUCT_TYPE_MISSING", "productType is required"));
-        } else {
-            String productType = trade.getProductType().toUpperCase(Locale.ROOT);
-            if (!"FX_OPTION".equals(productType) && !"OPTION".equals(productType)) {
-                errors.add(error(tradeId, "PRODUCT_TYPE_INVALID", "productType must be FX_OPTION or OPTION"));
-            }
+        String productType = trade.getProductType() == null ? "" : trade.getProductType().toUpperCase(Locale.ROOT);
+        if (!"SPOT".equals(productType)) {
+            errors.add(error(tradeId, "PRODUCT_TYPE_INVALID", "productType must be SPOT"));
         }
 
         if (!CURRENCY_PAIR_PATTERN.matcher(trade.getCurrencyPair()).matches()) {

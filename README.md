@@ -476,6 +476,25 @@ curl -s http://localhost:8080/actuator/metrics
 - `/actuator/metrics`
 - `/actuator/prometheus`
 
+### Logging helper
+
+For easier log inspection in local Docker runs, use `scripts/logs.sh`:
+
+```bash
+./scripts/logs.sh app
+./scripts/logs.sh errors
+./scripts/logs.sh trade T-E2E-12345
+```
+
+Other useful views:
+
+```bash
+./scripts/logs.sh all
+./scripts/logs.sh refs
+./scripts/logs.sh kafka
+./scripts/logs.sh db
+```
+
 ## Inbound message format
 
 The parser supports both:

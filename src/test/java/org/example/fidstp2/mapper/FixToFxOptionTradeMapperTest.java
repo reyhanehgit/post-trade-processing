@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class FixToFxOptionTradeMapperTest {
@@ -52,6 +53,13 @@ class FixToFxOptionTradeMapperTest {
 
         TradeParsingException ex = assertThrows(TradeParsingException.class, () -> mapper.map(dto));
         assertEquals("missing FIX tag 75 for tradeDate", ex.getMessage());
+    }
+
+    @Test
+    void supportsAnyProductTypeAsDefaultFallback() {
+        assertTrue(mapper.supports("FX_OPTION"));
+        assertTrue(mapper.supports("OPTION"));
+        assertTrue(mapper.supports("SPOT"));
     }
 }
 

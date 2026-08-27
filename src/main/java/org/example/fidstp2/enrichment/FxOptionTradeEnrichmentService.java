@@ -8,9 +8,10 @@ import org.example.fidstp2.domain.LegalEntity;
 import org.example.fidstp2.domain.SettlementInstruction;
 import org.example.fidstp2.exception.TradeEnrichmentException;
 
+import java.util.Locale;
 import java.util.Objects;
 
-public class FxOptionTradeEnrichmentService implements TradeEnrichmentService<FxOptionTrade> {
+public class FxOptionTradeEnrichmentService implements ProductTypeTradeEnrichmentService {
     private final CounterpartyService counterpartyService;
     private final CurrencyPairService currencyPairService;
     private final LegalEntityService legalEntityService;
@@ -29,6 +30,15 @@ public class FxOptionTradeEnrichmentService implements TradeEnrichmentService<Fx
                 settlementInstructionService,
                 "settlementInstructionService is required"
         );
+    }
+
+    @Override
+    public boolean supports(String productType) {
+        if (productType == null || productType.isBlank()) {
+            return true;
+        }
+        String normalized = productType.toUpperCase(Locale.ROOT);
+        return "FX_OPTION".equals(normalized) || "OPTION".equals(normalized);
     }
 
     @Override

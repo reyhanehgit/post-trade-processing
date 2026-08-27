@@ -11,12 +11,19 @@ import org.example.fidstp2.enrichment.InMemoryCounterpartyService;
 import org.example.fidstp2.enrichment.InMemoryCurrencyPairService;
 import org.example.fidstp2.enrichment.InMemoryLegalEntityService;
 import org.example.fidstp2.enrichment.InMemorySettlementInstructionService;
+import org.example.fidstp2.enrichment.ProductTypeTradeEnrichmentRegistry;
+import org.example.fidstp2.enrichment.SpotTradeEnrichmentService;
 import org.example.fidstp2.exception.TradeValidationException;
 import org.example.fidstp2.parser.FixTradeMessageParser;
 import org.example.fidstp2.processor.FxOptionTradeProcessor;
+import org.example.fidstp2.processor.ProductTypeTradeProcessorRegistry;
+import org.example.fidstp2.processor.SpotTradeProcessor;
 import org.example.fidstp2.validator.FxOptionTradeValidator;
+import org.example.fidstp2.validator.ProductTypeTradeValidatorRegistry;
+import org.example.fidstp2.validator.SpotTradeValidator;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -52,24 +59,39 @@ class TradeProcessingServiceTest {
                 () -> service.processRawMessage(invalidProductTypeMessage())
         );
 
-        assertEquals("PRODUCT_TYPE_INVALID: productType must be FX_OPTION or OPTION", ex.getMessage());
+        assertEquals("PRODUCT_TYPE_UNSUPPORTED: unsupported productType: FORWARD", ex.getMessage());
         verify(persistenceService).appendProcessingHistory(eq("T-501"), eq(ProcessingStatus.VALIDATION_FAILED), eq("VALIDATION"), any());
     }
 
+    @Test
+    void processesSpotTradeThroughSpotStrategies() {
+        TradePersistenceService persistenceService = mock(TradePersistenceService.class);
+        TradeProcessingService service = buildService(persistenceService);
+
+        ProcessedTrade result = service.processRawMessage(validSpotMessage());
+
+        assertEquals("T-502", result.getTradeId());
+        assertEquals(ProcessingStatus.PROCESSED, result.getStatus());
+        verify(persistenceService).appendProcessingHistory(eq("T-502"), eq(ProcessingStatus.PROCESSED), eq("PROCESSING"), any());
+    }
+
     private TradeProcessingService buildService(TradePersistenceService persistenceService) {
+        FxOptionTradeEnrichmentService fxOptionEnrichment = new FxOptionTradeEnrichmentService(
+                new InMemoryCounterpartyService(Map.of("CP-1", new Counterparty("CP-1", "Bank A", true))),
+                new InMemoryCurrencyPairService(Map.of("EUR/USD", new CurrencyPair("EUR/USD", "EUR", "USD"))),
+                new InMemoryLegalEntityService(Map.of("LE-1", new LegalEntity("LE-1", "Entity A", "EMEA"))),
+                new InMemorySettlementInstructionService(Map.of(
+                        "CP-1",
+                        new SettlementInstruction("SI-1", "ACC-001", "CLS")
+                ))
+        );
+        FxOptionTradeProcessor fxOptionProcessor = new FxOptionTradeProcessor();
+
         return new TradeProcessingService(
                 new FixTradeMessageParser(),
-                new FxOptionTradeValidator(),
-                new FxOptionTradeEnrichmentService(
-                        new InMemoryCounterpartyService(Map.of("CP-1", new Counterparty("CP-1", "Bank A", true))),
-                        new InMemoryCurrencyPairService(Map.of("EUR/USD", new CurrencyPair("EUR/USD", "EUR", "USD"))),
-                        new InMemoryLegalEntityService(Map.of("LE-1", new LegalEntity("LE-1", "Entity A", "EMEA"))),
-                        new InMemorySettlementInstructionService(Map.of(
-                                "CP-1",
-                                new SettlementInstruction("SI-1", "ACC-001", "CLS")
-                        ))
-                ),
-                new FxOptionTradeProcessor(),
+                new ProductTypeTradeValidatorRegistry(List.of(new SpotTradeValidator(), new FxOptionTradeValidator())),
+                new ProductTypeTradeEnrichmentRegistry(List.of(new SpotTradeEnrichmentService(fxOptionEnrichment), fxOptionEnrichment)),
+                new ProductTypeTradeProcessorRegistry(List.of(new SpotTradeProcessor(fxOptionProcessor), fxOptionProcessor)),
                 persistenceService
         );
     }
@@ -80,8 +102,13 @@ class TradeProcessingServiceTest {
     }
 
     private String invalidProductTypeMessage() {
-        return "11=T-501|37=EXT-501|20000=SPOT|55=EUR/USD|15=EUR|38=2500000|54=1|75=20260826|64=20260829|"
+        return "11=T-501|37=EXT-501|20000=FORWARD|55=EUR/USD|15=EUR|38=2500000|54=1|75=20260826|64=20260829|"
                 + "20001=CALL|44=1.2500|20003=20261001|20004=VANILLA|1=CP-1|20006=LE-1|49=OMS|";
+    }
+
+    private String validSpotMessage() {
+        return "11=T-502|37=EXT-502|20000=SPOT|55=EUR/USD|15=EUR|38=1500000|54=1|75=20260826|64=20260829|"
+                + "20001=CALL|44=1.2200|20003=20261001|20004=VANILLA|1=CP-1|20006=LE-1|49=OMS|";
     }
 }
 

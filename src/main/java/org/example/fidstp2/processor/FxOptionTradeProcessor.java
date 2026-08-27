@@ -8,8 +8,18 @@ import org.example.fidstp2.domain.ProcessingStatus;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
-public class FxOptionTradeProcessor implements TradeProcessor<FxOptionTrade> {
+public class FxOptionTradeProcessor implements TradeProcessor<FxOptionTrade>, ProductTypeTradeProcessor {
+    @Override
+    public boolean supports(String productType) {
+        if (productType == null || productType.isBlank()) {
+            return true;
+        }
+        String normalized = productType.toUpperCase(Locale.ROOT);
+        return "FX_OPTION".equals(normalized) || "OPTION".equals(normalized);
+    }
+
     @Override
     public ProcessedTrade process(FxOptionTrade trade) {
         List<String> notes = new ArrayList<>();
@@ -25,6 +35,7 @@ public class FxOptionTradeProcessor implements TradeProcessor<FxOptionTrade> {
         );
     }
 
+    @Override
     public ProcessedTrade process(EnrichedTrade enrichedTrade) {
         List<String> notes = new ArrayList<>();
         notes.add("Processed enriched FX option trade");

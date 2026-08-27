@@ -1,0 +1,75 @@
+2026-08-27T23:13:03.477Z  INFO 1 --- [currency-pair-service] [main] o.e.c.CurrencyPairServiceApplication     : Starting CurrencyPairServiceApplication v1.0.0 using Java 17.0.20 with PID 1 (/app/app.jar started by root in /app)
+2026-08-27T23:13:03.486Z  INFO 1 --- [currency-pair-service] [main] o.e.c.CurrencyPairServiceApplication     : No active profile set, falling back to 1 default profile: "default"
+2026-08-27T23:13:06.307Z  INFO 1 --- [currency-pair-service] [main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-08-27T23:13:06.525Z  INFO 1 --- [currency-pair-service] [main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 179 ms. Found 1 JPA repository interface.
+2026-08-27T23:13:08.085Z  INFO 1 --- [currency-pair-service] [main] o.s.boot.tomcat.TomcatWebServer          : Tomcat initialized with port 8889 (http)
+2026-08-27T23:13:08.129Z  INFO 1 --- [currency-pair-service] [main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-08-27T23:13:08.131Z  INFO 1 --- [currency-pair-service] [main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/11.0.24]
+2026-08-27T23:13:08.218Z  INFO 1 --- [currency-pair-service] [main] b.w.c.s.WebApplicationContextInitializer : Root WebApplicationContext: initialization completed in 4534 ms
+2026-08-27T23:13:08.896Z  INFO 1 --- [currency-pair-service] [main] org.hibernate.orm.jpa                    : HHH008540: Processing PersistenceUnitInfo [name: default]
+2026-08-27T23:13:09.100Z  INFO 1 --- [currency-pair-service] [main] org.hibernate.orm.core                   : HHH000001: Hibernate ORM core version 7.4.5.Final
+2026-08-27T23:13:10.791Z  INFO 1 --- [currency-pair-service] [main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-08-27T23:13:10.902Z  INFO 1 --- [currency-pair-service] [main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-08-27T23:13:11.347Z  INFO 1 --- [currency-pair-service] [main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@2fb48970
+2026-08-27T23:13:11.355Z  INFO 1 --- [currency-pair-service] [main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-08-27T23:13:11.486Z  WARN 1 --- [currency-pair-service] [main] org.hibernate.orm.deprecation            : HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-08-27T23:13:11.591Z  INFO 1 --- [currency-pair-service] [main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [jdbc:postgresql://currency-pair-db:5432/currency_pair_db]
+	Database driver: PostgreSQL JDBC Driver
+	Database dialect: PostgreSQLDialect
+	Database version: 16.15
+	Default catalog/schema: currency_pair_db/public
+	Autocommit mode: undefined/unknown
+	Isolation level: READ_COMMITTED [default READ_COMMITTED]
+	JDBC fetch size: none
+	Pool: DataSourceConnectionProvider
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-08-27T23:13:18.009Z  INFO 1 --- [currency-pair-service] [main] org.hibernate.orm.core                   : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-08-27T23:13:18.628Z  INFO 1 --- [currency-pair-service] [main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-08-27T23:13:19.209Z  INFO 1 --- [currency-pair-service] [main] o.s.d.j.r.query.QueryEnhancerFactories   : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-08-27T23:13:19.990Z  WARN 1 --- [currency-pair-service] [main] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-08-27T23:13:22.274Z  INFO 1 --- [currency-pair-service] [main] o.s.boot.tomcat.TomcatWebServer          : Tomcat started on port 8889 (http) with context path '/'
+2026-08-27T23:13:22.296Z  INFO 1 --- [currency-pair-service] [main] o.e.c.CurrencyPairServiceApplication     : Started CurrencyPairServiceApplication in 20.697 seconds (process running for 23.234)
+2026-08-27T23:13:28.219Z  INFO 1 --- [currency-pair-service] [http-nio-8889-exec-2] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-08-27T23:13:28.223Z  INFO 1 --- [currency-pair-service] [http-nio-8889-exec-2] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-08-27T23:13:28.267Z  INFO 1 --- [currency-pair-service] [http-nio-8889-exec-2] o.s.web.servlet.DispatcherServlet        : Completed initialization in 41 ms
+2026-08-27T23:23:13.960Z  INFO 1 --- [currency-pair-service] [SpringApplicationShutdownHook] o.s.boot.tomcat.GracefulShutdown         : Commencing graceful shutdown. Waiting for active requests to complete
+2026-08-27T23:23:14.152Z  INFO 1 --- [currency-pair-service] [tomcat-shutdown] o.s.boot.tomcat.GracefulShutdown         : Graceful shutdown complete
+2026-08-27T23:23:14.280Z  INFO 1 --- [currency-pair-service] [SpringApplicationShutdownHook] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-08-27T23:23:24.310Z  INFO 1 --- [currency-pair-service] [main] o.e.c.CurrencyPairServiceApplication     : Starting CurrencyPairServiceApplication v1.0.0 using Java 17.0.20 with PID 1 (/app/app.jar started by root in /app)
+2026-08-27T23:23:24.556Z  INFO 1 --- [currency-pair-service] [main] o.e.c.CurrencyPairServiceApplication     : No active profile set, falling back to 1 default profile: "default"
+2026-08-27T23:23:31.864Z  INFO 1 --- [currency-pair-service] [main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-08-27T23:23:32.282Z  INFO 1 --- [currency-pair-service] [main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 267 ms. Found 1 JPA repository interface.
+2026-08-27T23:23:41.146Z  INFO 1 --- [currency-pair-service] [main] o.s.boot.tomcat.TomcatWebServer          : Tomcat initialized with port 8889 (http)
+2026-08-27T23:23:41.944Z  INFO 1 --- [currency-pair-service] [main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-08-27T23:23:41.950Z  INFO 1 --- [currency-pair-service] [main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/11.0.24]
+2026-08-27T23:23:42.585Z  INFO 1 --- [currency-pair-service] [main] b.w.c.s.WebApplicationContextInitializer : Root WebApplicationContext: initialization completed in 17538 ms
+2026-08-27T23:23:47.104Z  INFO 1 --- [currency-pair-service] [main] org.hibernate.orm.jpa                    : HHH008540: Processing PersistenceUnitInfo [name: default]
+2026-08-27T23:23:49.177Z  INFO 1 --- [currency-pair-service] [main] org.hibernate.orm.core                   : HHH000001: Hibernate ORM core version 7.4.5.Final
+2026-08-27T23:23:52.067Z  INFO 1 --- [currency-pair-service] [main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-08-27T23:23:52.193Z  INFO 1 --- [currency-pair-service] [main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-08-27T23:23:52.905Z  INFO 1 --- [currency-pair-service] [main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@74bdfa0b
+2026-08-27T23:23:52.916Z  INFO 1 --- [currency-pair-service] [main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-08-27T23:23:53.101Z  WARN 1 --- [currency-pair-service] [main] org.hibernate.orm.deprecation            : HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-08-27T23:23:53.258Z  INFO 1 --- [currency-pair-service] [main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [jdbc:postgresql://currency-pair-db:5432/currency_pair_db]
+	Database driver: PostgreSQL JDBC Driver
+	Database dialect: PostgreSQLDialect
+	Database version: 16.15
+	Default catalog/schema: currency_pair_db/public
+	Autocommit mode: undefined/unknown
+	Isolation level: READ_COMMITTED [default READ_COMMITTED]
+	JDBC fetch size: none
+	Pool: DataSourceConnectionProvider
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-08-27T23:24:01.315Z  INFO 1 --- [currency-pair-service] [main] org.hibernate.orm.core                   : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-08-27T23:24:01.583Z  INFO 1 --- [currency-pair-service] [main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-08-27T23:24:01.973Z  INFO 1 --- [currency-pair-service] [main] o.s.d.j.r.query.QueryEnhancerFactories   : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-08-27T23:24:03.663Z  WARN 1 --- [currency-pair-service] [main] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-08-27T23:24:07.792Z  INFO 1 --- [currency-pair-service] [main] o.s.boot.tomcat.TomcatWebServer          : Tomcat started on port 8889 (http) with context path '/'
+2026-08-27T23:24:07.856Z  INFO 1 --- [currency-pair-service] [main] o.e.c.CurrencyPairServiceApplication     : Started CurrencyPairServiceApplication in 46.384 seconds (process running for 49.021)
+2026-08-27T23:24:10.940Z  INFO 1 --- [currency-pair-service] [http-nio-8889-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-08-27T23:24:10.942Z  INFO 1 --- [currency-pair-service] [http-nio-8889-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-08-27T23:24:10.950Z  INFO 1 --- [currency-pair-service] [http-nio-8889-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 7 ms

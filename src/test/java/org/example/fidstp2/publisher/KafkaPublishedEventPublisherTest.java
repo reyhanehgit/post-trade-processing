@@ -7,12 +7,14 @@ import org.springframework.kafka.core.KafkaTemplate;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.time.Instant;
+import java.util.concurrent.CompletableFuture;
 
 import org.mockito.ArgumentCaptor;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class KafkaPublishedEventPublisherTest {
 
@@ -25,6 +27,8 @@ class KafkaPublishedEventPublisherTest {
                 "fx.option.trade.processed",
                 new ObjectMapper().registerModule(new JavaTimeModule())
         );
+        when(kafkaTemplate.send(org.mockito.ArgumentMatchers.eq("fx.option.trade.processed"), org.mockito.ArgumentMatchers.eq("T-901"), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(CompletableFuture.completedFuture(null));
         ProcessedTradeEvent event = new ProcessedTradeEvent("1.0", "T-901", "PROCESSED", Instant.now());
 
         publisher.publish("T-901", event);

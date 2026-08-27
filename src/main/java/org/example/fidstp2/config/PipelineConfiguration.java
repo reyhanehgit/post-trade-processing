@@ -11,7 +11,6 @@ import org.example.fidstp2.enrichment.InMemoryCurrencyPairService;
 import org.example.fidstp2.enrichment.InMemoryLegalEntityService;
 import org.example.fidstp2.enrichment.InMemorySettlementInstructionService;
 import org.example.fidstp2.enrichment.JpaCounterpartyService;
-import org.example.fidstp2.enrichment.RemoteCounterpartyService;
 import org.example.fidstp2.enrichment.LegalEntityService;
 import org.example.fidstp2.enrichment.SettlementInstructionService;
 import org.example.fidstp2.mapper.FixToFxOptionTradeMapper;
@@ -27,6 +26,8 @@ import org.example.fidstp2.service.TradePipelineService;
 import org.example.fidstp2.service.TradePersistenceService;
 import org.example.fidstp2.service.TradeProcessingService;
 import org.example.fidstp2.service.TradePublicationService;
+import org.example.fidstp2.service.OutboxRepublisherService;
+import org.example.fidstp2.service.ReliabilityMetrics;
 import org.example.fidstp2.service.CounterpartyQueryService;
 import org.example.fidstp2.repository.CounterpartyRepository;
 import org.example.fidstp2.repository.OutboxEventRepository;
@@ -34,6 +35,7 @@ import org.example.fidstp2.repository.ProcessingHistoryRepository;
 import org.example.fidstp2.repository.TradeRepository;
 import org.example.fidstp2.validator.FxOptionTradeValidator;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.TopicPartition;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -42,12 +44,17 @@ import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
+import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
+import org.springframework.kafka.listener.DefaultErrorHandler;
+import org.springframework.kafka.support.ExponentialBackOffWithMaxRetries;
 import org.springframework.web.client.RestTemplate;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import io.micrometer.core.instrument.MeterRegistry;
 
 import java.util.HashMap;
+import java.time.Duration;
 import java.time.Clock;
 import java.util.Map;
 
@@ -149,15 +156,22 @@ public class PipelineConfiguration {
             TradeRepository tradeRepository,
             ProcessingHistoryRepository processingHistoryRepository,
             OutboxEventRepository outboxEventRepository,
-            EnrichedTradeToFxOptionTradeEntityMapper mapper
+            EnrichedTradeToFxOptionTradeEntityMapper mapper,
+            ReliabilityMetrics reliabilityMetrics
     ) {
         return new TradePersistenceService(
                 tradeRepository,
                 processingHistoryRepository,
                 outboxEventRepository,
                 mapper,
-                Clock.systemUTC()
+                Clock.systemUTC(),
+                reliabilityMetrics
         );
+    }
+
+    @Bean
+    public ReliabilityMetrics reliabilityMetrics(MeterRegistry meterRegistry) {
+        return new ReliabilityMetrics(meterRegistry);
     }
 
     @Bean
@@ -195,6 +209,36 @@ public class PipelineConfiguration {
     }
 
     @Bean
+    public DeadLetterPublishingRecoverer deadLetterPublishingRecoverer(
+            KafkaTemplate<String, String> kafkaTemplate,
+            ReliabilityMetrics reliabilityMetrics,
+            @Value("${app.kafka.dlq-topic}") String dlqTopic
+    ) {
+        return new DeadLetterPublishingRecoverer(
+                kafkaTemplate,
+                (record, exception) -> {
+                    reliabilityMetrics.incrementConsumerDlqPublish();
+                    return new TopicPartition(dlqTopic, record.partition());
+                }
+        );
+    }
+
+    @Bean
+    public DefaultErrorHandler kafkaListenerErrorHandler(
+            DeadLetterPublishingRecoverer deadLetterPublishingRecoverer,
+            @Value("${app.kafka.retry.max-attempts:3}") int maxAttempts,
+            @Value("${app.kafka.retry.backoff-ms:500}") long backoffMs
+    ) {
+        ExponentialBackOffWithMaxRetries backOffWithMaxRetries =
+                new ExponentialBackOffWithMaxRetries(Math.max(0, maxAttempts - 1));
+        long initialInterval = Math.max(1L, backoffMs);
+        backOffWithMaxRetries.setInitialInterval(initialInterval);
+        backOffWithMaxRetries.setMultiplier(2.0);
+        backOffWithMaxRetries.setMaxInterval(initialInterval * 16);
+        return new DefaultErrorHandler(deadLetterPublishingRecoverer, backOffWithMaxRetries);
+    }
+
+    @Bean
     public PublishedEventPublisher<ProcessedTradeEvent> publishedEventPublisher(
             KafkaTemplate<String, String> kafkaTemplate,
             @Value("${app.kafka.outbound-topic}") String outboundTopic,
@@ -208,9 +252,44 @@ public class PipelineConfiguration {
             ProcessedTradeToPublishedEventMapper mapper,
             PublishedEventPublisher<ProcessedTradeEvent> publisher,
             TradePersistenceService persistenceService,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            @Value("${app.outbox.retry.max-attempts:5}") int maxOutboxPublishAttempts,
+            @Value("${app.outbox.retry.backoff-ms:1000}") long outboxRetryBackoffMs
     ) {
-        return new TradePublicationService(mapper, publisher, persistenceService, objectMapper);
+        return new TradePublicationService(
+                mapper,
+                publisher,
+                persistenceService,
+                objectMapper,
+                maxOutboxPublishAttempts,
+                Duration.ofMillis(outboxRetryBackoffMs)
+        );
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "app.outbox.retry.enabled", havingValue = "true", matchIfMissing = true)
+    public OutboxRepublisherService outboxRepublisherService(
+            TradePersistenceService persistenceService,
+            ObjectMapper objectMapper,
+            KafkaTemplate<String, String> kafkaTemplate,
+            @Value("${app.kafka.outbound-topic}") String outboundTopic,
+            @Value("${app.kafka.dlq-topic}") String dlqTopic,
+            @Value("${app.outbox.retry.max-attempts:5}") int maxOutboxPublishAttempts,
+            @Value("${app.outbox.retry.backoff-ms:1000}") long outboxRetryBackoffMs,
+            @Value("${app.outbox.retry.batch-size:100}") int batchSize,
+            ReliabilityMetrics reliabilityMetrics
+    ) {
+        return new OutboxRepublisherService(
+                persistenceService,
+                objectMapper,
+                kafkaTemplate,
+                outboundTopic,
+                dlqTopic,
+                maxOutboxPublishAttempts,
+                Duration.ofMillis(outboxRetryBackoffMs),
+                batchSize,
+                reliabilityMetrics
+        );
     }
 
     @Bean

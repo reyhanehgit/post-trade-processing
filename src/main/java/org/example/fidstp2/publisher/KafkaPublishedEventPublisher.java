@@ -22,7 +22,7 @@ public class KafkaPublishedEventPublisher implements PublishedEventPublisher<Pro
     @Override
     public void publish(String key, ProcessedTradeEvent event) {
         try {
-            kafkaTemplate.send(topic, key, objectMapper.writeValueAsString(event));
+            kafkaTemplate.send(topic, key, objectMapper.writeValueAsString(event)).join();
         } catch (JsonProcessingException ex) {
             throw new PublishingException("failed to serialize trade event for topic " + topic, ex);
         } catch (RuntimeException ex) {

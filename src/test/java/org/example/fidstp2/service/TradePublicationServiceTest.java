@@ -10,13 +10,16 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -36,7 +39,9 @@ class TradePublicationServiceTest {
                 new ProcessedTradeToPublishedEventMapper(clock),
                 publisher,
                 persistenceService,
-                objectMapper
+                objectMapper,
+                5,
+                Duration.ofSeconds(1)
         );
         ProcessedTrade trade = new ProcessedTrade(
                 "T-902",
@@ -51,6 +56,39 @@ class TradePublicationServiceTest {
         verify(persistenceService).markOutboxEventPublished(10L);
         verify(persistenceService).appendProcessingHistory("T-902", ProcessingStatus.PUBLISHED, "PUBLISH", "published to outbound topic");
         assertEquals("T-902", event.tradeId());
+    }
+
+    @Test
+    void marksOutboxForRetryWhenPublishFails() {
+        @SuppressWarnings("unchecked")
+        PublishedEventPublisher<ProcessedTradeEvent> publisher = mock(PublishedEventPublisher.class);
+        TradePersistenceService persistenceService = mock(TradePersistenceService.class);
+        when(persistenceService.createOutboxEvent(eq("T-903"), eq("ProcessedTradeEvent"), any(), eq("NEW"))).thenReturn(11L);
+        when(persistenceService.markOutboxEventForRetry(eq(11L), any(), eq(5), eq(Duration.ofSeconds(1)))).thenReturn(false);
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.registerModule(new JavaTimeModule());
+        TradePublicationService service = new TradePublicationService(
+                new ProcessedTradeToPublishedEventMapper(Clock.systemUTC()),
+                publisher,
+                persistenceService,
+                objectMapper,
+                5,
+                Duration.ofSeconds(1)
+        );
+        ProcessedTrade trade = new ProcessedTrade(
+                "T-903",
+                ProcessingStatus.PROCESSED,
+                Instant.parse("2026-08-26T12:00:00Z"),
+                List.of("ok")
+        );
+
+        doThrow(new RuntimeException("kafka down")).when(publisher).publish(eq("T-903"), any());
+
+        RuntimeException thrown = assertThrows(RuntimeException.class, () -> service.publish(trade));
+
+        assertEquals("kafka down", thrown.getMessage());
+        verify(persistenceService).markOutboxEventForRetry(11L, "kafka down", 5, Duration.ofSeconds(1));
+        verify(persistenceService).appendProcessingHistory("T-903", ProcessingStatus.PUBLISH_FAILED, "PUBLISH", "kafka down");
     }
 }
 

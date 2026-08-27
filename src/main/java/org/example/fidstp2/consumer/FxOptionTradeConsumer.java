@@ -1,9 +1,9 @@
 package org.example.fidstp2.consumer;
 
 import org.example.fidstp2.service.TradePipelineService;
-import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.kafka.annotation.KafkaListener;
 
 import java.util.Objects;
 

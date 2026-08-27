@@ -364,8 +364,15 @@ The main runtime configuration lives in `src/main/resources/application.properti
 | `spring.kafka.consumer.group-id` | `fidstp2-consumer` | Consumer group |
 | `app.kafka.inbound-topic` | `fx.option.trade.raw` | Inbound raw trade topic |
 | `app.kafka.outbound-topic` | `fx.option.trade.processed` | Outbound processed trade topic |
-| `app.kafka.dlq-topic` | `fx.option.trade.dlq` | Dead-letter topic placeholder |
+| `app.kafka.dlq-topic` | `fx.option.trade.dlq` | Dead-letter topic |
 | `app.kafka.listener.enabled` | `true` | Enable/disable Kafka listener |
+| `app.kafka.retry.max-attempts` | `3` | Listener retries before DLQ |
+| `app.kafka.retry.backoff-ms` | `500` | Initial listener retry backoff |
+| `app.outbox.retry.enabled` | `true` | Enable scheduled outbox republisher |
+| `app.outbox.retry.max-attempts` | `5` | Max outbox publish attempts |
+| `app.outbox.retry.backoff-ms` | `1000` | Initial outbox retry backoff |
+| `app.outbox.retry.poll-ms` | `5000` | Poll interval for due outbox retries |
+| `app.outbox.retry.batch-size` | `100` | Max due events processed per poll |
 | `spring.flyway.enabled` | `true` | Enable DB migrations |
 
 ### Enrichment / Microservices properties
@@ -376,6 +383,46 @@ The main runtime configuration lives in `src/main/resources/application.properti
 | `enrichment.counterparty.remote.base-url` | `http://localhost:8888` | Counterparty service base URL |
 
 When `enrichment.counterparty.remote.enabled=true`, the app calls the remote Counterparty microservice instead of using local JPA-backed enrichment.
+
+### Reliability profile defaults
+
+Two profile-specific files tune retry behavior without requiring env vars:
+
+- `src/main/resources/application-dev.properties`
+  - lower retry budget (`app.kafka.retry.max-attempts=2`, `app.outbox.retry.max-attempts=3`)
+  - shorter backoffs for faster local feedback
+- `src/main/resources/application-prod.properties`
+  - higher retry budget (`app.kafka.retry.max-attempts=5`, `app.outbox.retry.max-attempts=8`)
+  - longer backoffs and larger outbox retry batch
+
+Activate profile via `SPRING_PROFILES_ACTIVE=dev` or `SPRING_PROFILES_ACTIVE=prod`.
+
+### Reliability metrics
+
+The app emits custom counters (visible via `/actuator/metrics` and `/actuator/prometheus`):
+
+- `fidstp2.outbox.retry.attempts`
+- `fidstp2.outbox.retry.success`
+- `fidstp2.outbox.dead_lettered`
+- `fidstp2.consumer.dlq.publishes`
+
+### Operations quick-check
+
+If the app is running locally on `localhost:8080`, these commands give a fast operational view:
+
+```bash
+curl -s http://localhost:8080/actuator/health
+curl -s http://localhost:8080/actuator/metrics/fidstp2.outbox.retry.attempts
+curl -s http://localhost:8080/actuator/metrics/fidstp2.outbox.retry.success
+curl -s http://localhost:8080/actuator/metrics/fidstp2.outbox.dead_lettered
+curl -s http://localhost:8080/actuator/metrics/fidstp2.consumer.dlq.publishes
+```
+
+To inspect all exported names at once:
+
+```bash
+curl -s http://localhost:8080/actuator/metrics
+```
 
 - `/actuator/health`
 - `/actuator/info`
@@ -440,6 +487,8 @@ Flyway migration files are stored in `src/main/resources/db/migration`.
   - creates the processing history audit table
 - `V3__create_outbox_event.sql`
   - creates the outbox event table used for event handoff tracking
+- `V5__harden_outbox_retries.sql`
+  - adds retry counters/scheduling columns and an index for due retries
 
 ### JPA entities present
 
@@ -715,7 +764,7 @@ To keep the README honest, here are the most important current-state notes:
   - legal entity: `LE-1`
   - settlement instruction keyed by `CP-1`
 - there are no REST controllers implemented yet
-- the DLQ topic is configured, but broader retry/DLQ/replay operational behavior is part of the documented roadmap
+- reliability behavior now includes listener retries with DLQ fallback and scheduled outbox republishing
 - the codebase is structured for future hardening, but some roadmap items are still planned rather than complete
 
 ## Summary

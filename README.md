@@ -8,8 +8,11 @@ This repository already contains the core pipeline building blocks and automated
 
 - [What the service does](#what-the-service-does)
 - [Current implementation status](#current-implementation-status)
+- [Simple requirements summary](REQUIREMENTS_SUMMARY.md)
 - [Project progress snapshot](#project-progress-snapshot)
 - [Architecture overview](#architecture-overview)
+- [Detailed architecture doc](ARCHITECTURE.md)
+- [Detailed architecture doc](ARCHITECTURE.md)
 - [Sequence diagram](#sequence-diagram)
 - [Project structure](#project-structure)
 - [Technology stack](#technology-stack)
@@ -85,6 +88,10 @@ Approximate implementation status (August 2026):
 Estimated overall completion: **~70%**.
 
 ## Architecture overview
+For a fuller runtime/object-relationship view with diagrams, see `ARCHITECTURE.md`.
+
+
+For a fuller runtime/object-relationship view with diagrams, see `ARCHITECTURE.md`.
 
 ### Microservices architecture
 

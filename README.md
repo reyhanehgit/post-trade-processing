@@ -1,6 +1,6 @@
 # FIDSTP2
 
-FIDSTP2 is a Spring Boot service for **post-trade FX options processing**. It consumes raw FIX-style trade messages, parses them into domain objects, validates the content, enriches the trade with reference data, produces a processed event, and persists supporting lifecycle data through JPA/Flyway-backed tables.
+FIDSTP2 is a Spring Boot service for **post-trade FX options processing**. It consumes raw XML trade messages defined by XSD, parses them into domain objects, validates the content, enriches the trade with reference data, produces a processed event, and persists supporting lifecycle data through JPA/Flyway-backed tables.
 
 This repository already contains the core pipeline building blocks and automated tests. It also includes roadmap documents for the remaining production-hardening work.
 
@@ -37,9 +37,9 @@ This repository already contains the core pipeline building blocks and automated
 
 At a high level, the application processes FX option trades like this:
 
-1. Receive a raw FIX-style message from Kafka.
-2. Adapt FIX tags into a tag map.
-3. Map the tag map into an `FxOptionTrade` domain object.
+1. Receive a raw XML message from Kafka.
+2. Parse XML into generated XSD model classes.
+3. Map the XSD model into an `FxOptionTrade` domain object.
 4. Validate required fields and cross-field rules.
 5. Enrich the trade with counterparty, currency-pair, legal-entity, and settlement reference data.
 6. Produce a `ProcessedTrade` result.
@@ -52,7 +52,7 @@ At a high level, the application processes FX option trades like this:
 
 - Spring Boot application bootstrap in `src/main/java/org/example/fidstp2/Fidstp2Application.java`
 - Pipeline wiring in `src/main/java/org/example/fidstp2/config/PipelineConfiguration.java`
-- FIX adaptation and parsing
+- XSD-driven parsing and XML-to-domain mapping
 - FX option validation rules
 - Property-driven enrichment services (local JPA/in-memory or remote microservice)
 - Trade processing and publication services
@@ -132,7 +132,7 @@ FxOptionTradeConsumer
 TradePipelineService
 		|
 		+--> TradeProcessingService
-		|       +--> FixTradeMessageParser
+		|       +--> XsdTradeMessageParser
 		|       +--> FxOptionTradeValidator
 		|       +--> FxOptionTradeEnrichmentService
 		|       +--> FxOptionTradeProcessor
@@ -147,7 +147,9 @@ TradePipelineService
 - `consumer/FxOptionTradeConsumer` - Kafka entrypoint for inbound raw messages
 - `service/TradePipelineService` - top-level orchestration for process + publish
 - `service/TradeProcessingService` - parse, validate, enrich, process
-- `parser/FixTradeMessageParser` - converts raw FIX text into `FxOptionTrade`
+- `parser/XsdTradeMessageParser` - converts raw XML into `FxOptionTrade`
+- `mapper/XsdTradeEnvelopeReader` - unmarshals `tradeEnvelope` XML into generated XSD model types
+- `mapper/XsdFxOptionTradeMapper` - maps generated XSD model types into domain trade objects
 - `validator/FxOptionTradeValidator` - business/format validation
 - `enrichment/FxOptionTradeEnrichmentService` - attaches reference data
 - `processor/FxOptionTradeProcessor` - builds `ProcessedTrade`
@@ -162,14 +164,14 @@ sequenceDiagram
 	participant C as FxOptionTradeConsumer
 	participant P as TradePipelineService
 	participant TPS as TradeProcessingService
-	participant FP as FixTradeMessageParser
+	participant FP as XsdTradeMessageParser
 	participant V as FxOptionTradeValidator
 	participant E as FxOptionTradeEnrichmentService
 	participant X as FxOptionTradeProcessor
 	participant PUB as TradePublicationService
 	participant KP as KafkaPublishedEventPublisher
 
-	K->>C: raw FIX-style message
+	K->>C: raw XML message
 	C->>P: handleRawMessage(rawMessage)
 	P->>TPS: processRawMessage(rawMessage)
 	TPS->>FP: parse(rawMessage)
@@ -197,7 +199,7 @@ src/main/java/org/example/fidstp2/
 ├── dto/           Inbound/outbound DTOs
 ├── enrichment/    Reference data services
 ├── exception/     Domain-specific exceptions
-├── mapper/        FIX/domain/event mappers
+├── mapper/        XSD/domain/event mappers
 ├── parser/        Raw message parsing
 ├── persistence/   JPA entities
 ├── processor/     Business processing
@@ -504,37 +506,55 @@ Other useful views:
 
 ## Inbound message format
 
-The parser supports both:
-
-- pipe-delimited messages using `|`
-- standard SOH-delimited FIX-style messages using `\u0001`
+Inbound payloads are XML documents modeled by `src/main/resources/xsd/trade-types.xsd`.
 
 ### Example raw message
 
-```text
-11=T-100|37=EXT-100|20000=OPTION|55=EUR/USD|15=EUR|38=2500000|54=1|75=20260826|64=20260829|20001=CALL|44=1.2500|20003=20261001|20004=VANILLA|1=CP-101|20006=LE-42|49=OMS|
+```xml
+<tradeEnvelope xmlns="http://example.org/fidstp2/trade" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <trade xsi:type="FxOptionTradeType">
+	<tradeId>T-100</tradeId>
+	<externalTradeId>EXT-100</externalTradeId>
+	<productType>FX_OPTION</productType>
+	<currencyPair>EUR/USD</currencyPair>
+	<notionalAmount>2500000</notionalAmount>
+	<notionalCurrency>EUR</notionalCurrency>
+	<buySell>BUY</buySell>
+	<tradeDate>2026-08-26</tradeDate>
+	<valueDate>2026-08-29</valueDate>
+	<optionType>CALL</optionType>
+	<strikePrice>1.2500</strikePrice>
+	<expiryDate>2026-10-01</expiryDate>
+	<optionStyle>VANILLA</optionStyle>
+  </trade>
+  <counterparty>
+	<counterpartyId>CP-101</counterpartyId>
+	<legalEntityId>LE-42</legalEntityId>
+	<sourceSystem>OMS</sourceSystem>
+  </counterparty>
+</tradeEnvelope>
 ```
 
-### Key tags used by the current implementation
+### Key XML fields
 
-| Tag | Meaning |
+| XML field | Meaning |
 |---|---|
-| `11` | Trade ID |
-| `37` | External trade ID |
-| `20000` | Product type |
-| `55` | Currency pair |
-| `15` | Notional currency |
-| `38` | Notional amount |
-| `54` | Buy/Sell side |
-| `75` | Trade date |
-| `64` | Value date |
-| `20001` | Option type |
-| `44` | Strike price |
-| `20003` | Expiry date |
-| `20004` | Option style |
-| `1` | Counterparty ID |
-| `20006` | Legal entity ID |
-| `49` | Source system |
+| `trade/tradeId` | Trade ID |
+| `trade/externalTradeId` | External trade ID |
+| `trade/productType` | Product type |
+| `trade/currencyPair` | Currency pair |
+| `trade/notionalCurrency` | Notional currency |
+| `trade/notionalAmount` | Notional amount |
+| `trade/buySell` | Buy/Sell side |
+| `trade/tradeDate` | Trade date |
+| `trade/valueDate` | Value date |
+| `trade/optionType` | Option type |
+| `trade/strikePrice` | Strike price |
+| `trade/expiryDate` | Expiry date |
+| `trade/optionStyle` | Option style |
+| `counterparty/counterpartyId` | Counterparty ID |
+| `counterparty/legalEntityId` | Legal entity ID |
+| `counterparty/sourceSystem` | Source system |
 
 ### Validation highlights
 

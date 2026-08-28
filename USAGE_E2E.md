@@ -45,7 +45,31 @@ Use one unique trade id each run:
 
 ```bash
 TRADE_ID="T-E2E-$(date +%s)"
-RAW_MSG="11=${TRADE_ID}|37=EXT-${TRADE_ID}|20000=OPTION|55=EUR/USD|15=EUR|38=2500000|54=1|75=20260826|64=20260829|20001=CALL|44=1.2500|20003=20261001|20004=VANILLA|1=CP-1|20006=LE-1|49=OMS|"
+RAW_MSG=$(cat <<XML
+<tradeEnvelope xmlns="http://example.org/fidstp2/trade" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <trade xsi:type="FxOptionTradeType">
+	<tradeId>${TRADE_ID}</tradeId>
+	<externalTradeId>EXT-${TRADE_ID}</externalTradeId>
+	<productType>FX_OPTION</productType>
+	<currencyPair>EUR/USD</currencyPair>
+	<notionalAmount>2500000</notionalAmount>
+	<notionalCurrency>EUR</notionalCurrency>
+	<buySell>BUY</buySell>
+	<tradeDate>2026-08-26</tradeDate>
+	<valueDate>2026-08-29</valueDate>
+	<optionType>CALL</optionType>
+	<strikePrice>1.2500</strikePrice>
+	<expiryDate>2026-10-01</expiryDate>
+	<optionStyle>VANILLA</optionStyle>
+  </trade>
+  <counterparty>
+	<counterpartyId>CP-1</counterpartyId>
+	<legalEntityId>LE-1</legalEntityId>
+	<sourceSystem>OMS</sourceSystem>
+  </counterparty>
+</tradeEnvelope>
+XML
+)
 printf '%s\n' "$RAW_MSG" | docker exec -i fidstp2-kafka kafka-console-producer --bootstrap-server localhost:9092 --topic fx.option.trade.raw
 ```
 
@@ -86,11 +110,17 @@ docker compose up -d --build fidstp2-app
 
 ## 6) Verify DLQ behavior with an invalid trade
 
-This message is intentionally incomplete and should fail processing.
+This message is intentionally malformed XML and should fail processing.
 
 ```bash
 BAD_ID="T-BAD-$(date +%s)"
-printf '%s\n' "11=${BAD_ID}|37=EXT-${BAD_ID}|55=EUR/USD|" | docker exec -i fidstp2-kafka kafka-console-producer --bootstrap-server localhost:9092 --topic fx.option.trade.raw
+BAD_MSG=$(cat <<XML
+<tradeEnvelope>
+  <trade>
+	<tradeId>${BAD_ID}</tradeId>
+XML
+)
+printf '%s\n' "$BAD_MSG" | docker exec -i fidstp2-kafka kafka-console-producer --bootstrap-server localhost:9092 --topic fx.option.trade.raw
 ```
 
 Check DLQ topic:

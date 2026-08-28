@@ -10,16 +10,11 @@ flowchart TD
     B --> C[TradePipelineService]
     C --> D[TradeProcessingService]
 
-    D --> E[DefaultFixMessageAdapter]
-    E --> F[FixMessageDto]
-
-    F --> G[FixTradeMessageParser]
-    G --> H[FixTradeMapperRegistry]
-    H --> H1[FxSpotFixTradeMapper]
-    H --> H2[FixToFxOptionTradeMapper]
-
-    H1 --> I[FxOptionTrade]
-    H2 --> I
+    D --> E[XsdTradeMessageParser]
+    E --> F[XsdTradeEnvelopeReader]
+    F --> G[Generated XSD model]
+    G --> H[XsdFxOptionTradeMapper]
+    H --> I[FxOptionTrade]
 
     I --> J[ProductTypeTradeValidatorRegistry]
     J --> J1[SpotTradeValidator]
@@ -67,9 +62,9 @@ flowchart TD
 ## 2) Simplest mental model
 
 ```text
-Raw FIX message
-  -> split into FIX tags
-  -> choose mapper by product type
+Raw XML tradeEnvelope message
+  -> unmarshal with XSD-generated model
+  -> map XML model to domain trade
   -> build trade object
   -> choose validator by product type
   -> choose enrichment strategy by product type
@@ -102,29 +97,19 @@ classDiagram
       +processRawMessage(rawMessage) ProcessedTrade
     }
 
-    class FixTradeMessageParser {
-      -FixMessageAdapter adapter
-      -FixTradeMapperRegistry~FxOptionTrade~ mapperRegistry
+    class XsdTradeMessageParser {
+      -XsdTradeEnvelopeReader reader
+      -XsdFxOptionTradeMapper mapper
       +parse(rawMessage) FxOptionTrade
     }
 
-    class DefaultFixMessageAdapter {
-      +adapt(rawMessage) FixMessageDto
+    class XsdTradeEnvelopeReader {
+      +read(xmlInputStream) TradeEnvelopeType
     }
 
-    class FixTradeMapperRegistry~T~ {
-      -List~FixProductTradeMapper~ mappers
-      +map(fixMessage) T
+    class XsdFxOptionTradeMapper {
+      +toDomain(envelope) FxOptionTrade
     }
-
-    class FixProductTradeMapper~T~ {
-      <<interface>>
-      +supports(productType) boolean
-      +map(fixMessage) T
-    }
-
-    class FxSpotFixTradeMapper
-    class FixToFxOptionTradeMapper
 
     class ProductTypeTradeValidatorRegistry {
       -List~ProductTypeTradeValidator~ validators
@@ -201,17 +186,14 @@ classDiagram
     TradePipelineService --> TradeProcessingService
     TradePipelineService --> TradePublicationService
 
-    TradeProcessingService --> FixTradeMessageParser
+    TradeProcessingService --> XsdTradeMessageParser
     TradeProcessingService --> ProductTypeTradeValidatorRegistry
     TradeProcessingService --> ProductTypeTradeEnrichmentRegistry
     TradeProcessingService --> ProductTypeTradeProcessorRegistry
     TradeProcessingService --> TradePersistenceService
 
-    FixTradeMessageParser --> DefaultFixMessageAdapter
-    FixTradeMessageParser --> FixTradeMapperRegistry
-    FixTradeMapperRegistry --> FixProductTradeMapper
-    FxSpotFixTradeMapper ..|> FixProductTradeMapper
-    FixToFxOptionTradeMapper ..|> FixProductTradeMapper
+    XsdTradeMessageParser --> XsdTradeEnvelopeReader
+    XsdTradeMessageParser --> XsdFxOptionTradeMapper
 
     ProductTypeTradeValidatorRegistry --> ProductTypeTradeValidator
     SpotTradeValidator ..|> ProductTypeTradeValidator
@@ -225,7 +207,7 @@ classDiagram
     SpotTradeProcessor ..|> ProductTypeTradeProcessor
     FxOptionTradeProcessor ..|> ProductTypeTradeProcessor
 
-    FixTradeMessageParser --> FxOptionTrade
+    XsdTradeMessageParser --> FxOptionTrade
     ProductTypeTradeEnrichmentRegistry --> EnrichedTrade
     ProductTypeTradeProcessorRegistry --> ProcessedTrade
     TradePublicationService --> ProcessedTradeEvent
@@ -238,15 +220,12 @@ classDiagram
 
 - **`FxOptionTradeConsumer`**
   - Kafka listener for raw inbound messages.
-- **`DefaultFixMessageAdapter`**
-  - Converts raw FIX-like text into a `FixMessageDto` tag map.
-  - Supports both `|` and SOH (`\u0001`) delimiters.
-- **`FixTradeMessageParser`**
-  - Orchestrates raw message -> adapter -> mapper registry.
-- **`FixTradeMapperRegistry`**
-  - Chooses which product mapper should handle the message based on FIX tag `20000`.
-- **`FxSpotFixTradeMapper` / `FixToFxOptionTradeMapper`**
-  - Product-type strategies for mapping FIX data into a domain trade object.
+- **`XsdTradeMessageParser`**
+  - Orchestrates raw XML message -> JAXB unmarshal -> domain mapper.
+- **`XsdTradeEnvelopeReader`**
+  - Unmarshals XML using classes generated from `src/main/resources/xsd/trade-types.xsd`.
+- **`XsdFxOptionTradeMapper`**
+  - Maps generated XSD model classes into the `FxOptionTrade` domain object.
 
 ### Domain and business layer
 

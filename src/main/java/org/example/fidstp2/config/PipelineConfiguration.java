@@ -23,7 +23,8 @@ import org.example.fidstp2.mapper.EnrichedTradeToFxOptionTradeEntityMapper;
 import org.example.fidstp2.mapper.ProcessedTradeToPublishedEventMapper;
 import org.example.fidstp2.parser.DefaultFixMessageAdapter;
 import org.example.fidstp2.parser.FixMessageAdapter;
-import org.example.fidstp2.parser.FixTradeMessageParser;
+import org.example.fidstp2.parser.TradeMessageParser;
+import org.example.fidstp2.parser.XsdTradeMessageParser;
 import org.example.fidstp2.processor.FxOptionTradeProcessor;
 import org.example.fidstp2.processor.ProductTypeTradeProcessorRegistry;
 import org.example.fidstp2.processor.SpotTradeProcessor;
@@ -104,11 +105,8 @@ public class PipelineConfiguration {
     }
 
     @Bean
-    public FixTradeMessageParser tradeMessageParser(
-            FixMessageAdapter adapter,
-            FixTradeMapperRegistry<FxOptionTrade> mapperRegistry
-    ) {
-        return new FixTradeMessageParser(adapter, mapperRegistry);
+    public TradeMessageParser<FxOptionTrade> tradeMessageParser() {
+        return new XsdTradeMessageParser();
     }
 
     @Bean
@@ -243,7 +241,7 @@ public class PipelineConfiguration {
 
     @Bean
     public TradeProcessingService tradeProcessingService(
-            FixTradeMessageParser tradeMessageParser,
+            TradeMessageParser<FxOptionTrade> tradeMessageParser,
             ProductTypeTradeValidatorRegistry validatorRegistry,
             ProductTypeTradeEnrichmentRegistry enrichmentRegistry,
             ProductTypeTradeProcessorRegistry processorRegistry,

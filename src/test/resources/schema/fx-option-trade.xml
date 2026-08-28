@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tradeEnvelope xmlns="http://example.org/fidstp2/trade"
+               xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xsi:type="TradeEnvelopeType">
+    <trade xsi:type="FxOptionTradeType">
+        <tradeId>T-900</tradeId>
+        <externalTradeId>EXT-900</externalTradeId>
+        <productType>FX_OPTION</productType>
+        <currencyPair>EUR/USD</currencyPair>
+        <notionalAmount>1000000</notionalAmount>
+        <notionalCurrency>EUR</notionalCurrency>
+        <buySell>BUY</buySell>
+        <tradeDate>2026-08-26</tradeDate>
+        <valueDate>2026-08-29</valueDate>
+        <optionType>CALL</optionType>
+        <strikePrice>1.1234</strikePrice>
+        <expiryDate>2026-10-01</expiryDate>
+        <optionStyle>VANILLA</optionStyle>
+    </trade>
+    <counterparty>
+        <counterpartyId>CP-1</counterpartyId>
+        <legalEntityId>LE-1</legalEntityId>
+        <sourceSystem>OMS</sourceSystem>
+    </counterparty>
+</tradeEnvelope>
+

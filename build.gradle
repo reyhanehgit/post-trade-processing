@@ -18,6 +18,13 @@ repositories {
     mavenCentral()
 }
 
+configurations {
+    xjc
+}
+
+def xsdInputDir = layout.projectDirectory.dir('src/main/resources/xsd')
+def xjcOutputDir = layout.buildDirectory.dir('generated/sources/xjc/main')
+
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter'
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -30,7 +37,11 @@ dependencies {
     implementation 'org.flywaydb:flyway-database-postgresql'
     implementation 'com.fasterxml.jackson.core:jackson-databind'
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+    implementation 'jakarta.xml.bind:jakarta.xml.bind-api:4.0.2'
+    implementation 'org.glassfish.jaxb:jaxb-runtime:4.0.5'
     implementation 'com.google.guava:guava:33.2.1-jre'
+
+    xjc 'org.glassfish.jaxb:jaxb-xjc:4.0.5'
 
     runtimeOnly 'org.postgresql:postgresql'
 
@@ -43,6 +54,34 @@ dependencies {
     testImplementation 'com.h2database:h2'
     testImplementation 'com.github.tomakehurst:wiremock-jre8:2.35.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.register('generateXsdModel', JavaExec) {
+    group = 'build'
+    description = 'Generates JAXB Java classes from XSD trade schemas.'
+    classpath = configurations.xjc
+    mainClass = 'com.sun.tools.xjc.XJCFacade'
+    inputs.files(fileTree(xsdInputDir) { include '**/*.xsd' })
+    outputs.dir(xjcOutputDir)
+    doFirst {
+        delete(xjcOutputDir)
+        mkdir(xjcOutputDir)
+    }
+    args '-d', xjcOutputDir.get().asFile.absolutePath,
+            '-p', 'org.example.fidstp2.schema.trade',
+            xsdInputDir.file('trade-types.xsd').asFile.absolutePath
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir(xjcOutputDir)
+        }
+    }
+}
+
+tasks.named('compileJava') {
+    dependsOn(tasks.named('generateXsdModel'))
 }
 
 tasks.named('test') {

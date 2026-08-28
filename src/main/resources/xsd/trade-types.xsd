@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="http://example.org/fidstp2/trade"
+           xmlns:tns="http://example.org/fidstp2/trade"
+           elementFormDefault="qualified">
+
+    <xs:element name="tradeEnvelope" type="tns:TradeEnvelopeType"/>
+
+    <xs:complexType name="TradeEnvelopeType">
+        <xs:sequence>
+            <xs:element name="trade" type="tns:TradeType"/>
+            <xs:element name="counterparty" type="tns:CounterpartyType"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="CounterpartyType">
+        <xs:sequence>
+            <xs:element name="counterpartyId" type="xs:string"/>
+            <xs:element name="legalEntityId" type="xs:string"/>
+            <xs:element name="sourceSystem" type="xs:string"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="TradeType" abstract="true">
+        <xs:sequence>
+            <xs:element name="tradeId" type="xs:string"/>
+            <xs:element name="externalTradeId" type="xs:string"/>
+            <xs:element name="productType" type="tns:ProductType"/>
+            <xs:element name="currencyPair" type="xs:string"/>
+            <xs:element name="notionalAmount" type="xs:decimal"/>
+            <xs:element name="notionalCurrency" type="xs:string"/>
+            <xs:element name="buySell" type="tns:BuySellType"/>
+            <xs:element name="tradeDate" type="xs:date"/>
+            <xs:element name="valueDate" type="xs:date"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="SpotTradeType">
+        <xs:complexContent>
+            <xs:extension base="tns:TradeType"/>
+        </xs:complexContent>
+    </xs:complexType>
+
+    <xs:complexType name="FxOptionTradeType">
+        <xs:complexContent>
+            <xs:extension base="tns:TradeType">
+                <xs:sequence>
+                    <xs:element name="optionType" type="tns:OptionType"/>
+                    <xs:element name="strikePrice" type="xs:decimal"/>
+                    <xs:element name="expiryDate" type="xs:date"/>
+                    <xs:element name="optionStyle" type="tns:OptionStyleType"/>
+                </xs:sequence>
+            </xs:extension>
+        </xs:complexContent>
+    </xs:complexType>
+
+    <xs:simpleType name="ProductType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="SPOT"/>
+            <xs:enumeration value="FX_OPTION"/>
+            <xs:enumeration value="FORWARD"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="BuySellType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="BUY"/>
+            <xs:enumeration value="SELL"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="OptionType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="CALL"/>
+            <xs:enumeration value="PUT"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="OptionStyleType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="VANILLA"/>
+            <xs:enumeration value="MULTI_LEG"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+</xs:schema>
+

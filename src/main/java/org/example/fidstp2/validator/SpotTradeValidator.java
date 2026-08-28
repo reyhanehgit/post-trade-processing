@@ -15,8 +15,8 @@ public class SpotTradeValidator implements ProductTypeTradeValidator {
     private static final String STAGE = "VALIDATION";
 
     @Override
-    public boolean supports(String productType) {
-        return "SPOT".equals(productType);
+    public String supportedProductType() {
+        return "SPOT";
     }
 
     @Override

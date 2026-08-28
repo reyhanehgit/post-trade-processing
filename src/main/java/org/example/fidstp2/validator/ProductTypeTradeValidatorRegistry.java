@@ -4,17 +4,32 @@ import org.example.fidstp2.domain.FxOptionTrade;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public class ProductTypeTradeValidatorRegistry {
-    private final List<ProductTypeTradeValidator> validators;
+    private final Map<String, ProductTypeTradeValidator> validatorsByProductType;
 
     public ProductTypeTradeValidatorRegistry(List<ProductTypeTradeValidator> validators) {
-        this.validators = List.copyOf(Objects.requireNonNull(validators, "validators are required"));
-        if (this.validators.isEmpty()) {
+        List<ProductTypeTradeValidator> immutableValidators = List.copyOf(
+                Objects.requireNonNull(validators, "validators are required")
+        );
+        if (immutableValidators.isEmpty()) {
             throw new IllegalArgumentException("at least one validator is required");
         }
+        this.validatorsByProductType = immutableValidators.stream()
+                .collect(Collectors.toUnmodifiableMap(
+                        validator -> ProductTypeNormalizer.normalize(validator.supportedProductType()),
+                        Function.identity(),
+                        (left, right) -> {
+                            throw new IllegalArgumentException(
+                                    "duplicate validator registration for productType: "
+                                            + ProductTypeNormalizer.normalize(left.supportedProductType())
+                            );
+                        }
+                ));
     }
 
     public ValidationResult validate(FxOptionTrade trade) {
@@ -27,11 +42,10 @@ public class ProductTypeTradeValidatorRegistry {
                     Instant.now()
             )));
         }
-        String productType = normalizeProductType(trade.getProductType());
-        for (ProductTypeTradeValidator validator : validators) {
-            if (validator.supports(productType)) {
-                return validator.validate(trade);
-            }
+        String productType = ProductTypeNormalizer.normalize(trade.getProductType());
+        ProductTypeTradeValidator validator = validatorsByProductType.get(productType);
+        if (validator != null) {
+            return validator.validate(trade);
         }
         return ValidationResult.invalid(List.of(new ValidationError(
                 trade.getTradeId(),
@@ -40,14 +54,6 @@ public class ProductTypeTradeValidatorRegistry {
                 "unsupported productType: " + productType,
                 Instant.now()
         )));
-    }
-
-    private static String normalizeProductType(String rawProductType) {
-        if (rawProductType == null || rawProductType.isBlank()) {
-            return "FX_OPTION";
-        }
-        String value = rawProductType.toUpperCase(Locale.ROOT);
-        return "OPTION".equals(value) ? "FX_OPTION" : value;
     }
 }
 

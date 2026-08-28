@@ -15,12 +15,8 @@ public class FxOptionTradeValidator implements ProductTypeTradeValidator {
     private static final String STAGE = "VALIDATION";
 
     @Override
-    public boolean supports(String productType) {
-        if (productType == null || productType.isBlank()) {
-            return true;
-        }
-        String normalized = productType.toUpperCase(Locale.ROOT);
-        return "FX_OPTION".equals(normalized) || "OPTION".equals(normalized);
+    public String supportedProductType() {
+        return "FX_OPTION";
     }
 
     @Override
